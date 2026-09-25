@@ -1,0 +1,14 @@
+import { NextRequest, NextResponse } from "next/server";
+import { localComplianceReview, sanitizeEngagementBait } from "@/lib/metaCompliance";
+
+export async function POST(request:NextRequest){
+  const body=await request.json().catch(()=>({}));const text=String(body.text||"").trim();const dimension=String(body.dimension||"Hook");const count=Math.max(3,Math.min(5,Number(body.count||4)));const apiKey=process.env.OPENAI_API_KEY;
+  if(!text)return NextResponse.json({error:"Falta el texto base."},{status:400});
+  if(!apiKey){const variants=Array.from({length:count},(_,i)=>({text:i===0?text:`${text}${i%2?"":""}`,label:`Variante ${i+1}`,hypothesis:`Cambiar ${dimension.toLowerCase()} sin alterar la idea central.`,compliance:localComplianceReview(text)}));return NextResponse.json({source:"fallback",items:variants})}
+  const learning=body.learning&&typeof body.learning==="object"?`\nPerfil de aprendizaje disponible: ${String(body.learning.generationInstruction||"")}`:"";
+  const prompt=`Eres un laboratorio de copy para Facebook. Crea ${count} variantes NUEVAS de un mismo concepto, cambiando SOLO la dimensión "${dimension}" tanto como sea posible sin alterar el significado central. Texto base: "${text}".${learning}\n\nCada variante debe sonar natural en español de México. No copies fórmulas de engagement bait. Prohibido pedir comentar, compartir, reaccionar, dar like, etiquetar, seguir o activar notificaciones. No uses clickbait. Devuelve una etiqueta corta y una hipótesis descriptiva de qué cambia; no predigas viralidad.`;
+  const response=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${apiKey}`,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_MODEL||"gpt-5-mini",input:prompt,text:{format:{type:"json_schema",name:"copy_experiment",schema:{type:"object",additionalProperties:false,properties:{items:{type:"array",minItems:3,maxItems:5,items:{type:"object",additionalProperties:false,properties:{text:{type:"string"},label:{type:"string"},hypothesis:{type:"string"}},required:["text","label","hypothesis"]}}},required:["items"]}}}})});
+  if(!response.ok)return NextResponse.json({error:"No fue posible generar el experimento."},{status:502});
+  const data=await response.json();const output=data.output_text||data.output?.flatMap((o:any)=>o.content||[]).find((c:any)=>c.type==="output_text")?.text;
+  try{const parsed=JSON.parse(output||"{}");const items=(parsed.items||[]).slice(0,count).map((x:any)=>{const raw=String(x.text||"").trim();const first=localComplianceReview(raw);const safe=first.status==="pass"?raw:sanitizeEngagementBait(raw);return {...x,text:safe,compliance:localComplianceReview(safe)}}).filter((x:any)=>x.text&&x.compliance.status!=="block");return NextResponse.json({source:"openai",items})}catch{return NextResponse.json({error:"La respuesta no pudo interpretarse."},{status:502})}
+}
