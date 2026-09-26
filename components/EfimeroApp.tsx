@@ -35,6 +35,7 @@ import ControlCenter from "@/components/ControlCenter";
 import QuickPostStudio from "@/components/QuickPostStudio";
 import SinglePostScheduler from "@/components/SinglePostScheduler";
 import LogoutButton from "@/components/auth/LogoutButton";
+import { persistWorkingPage, resolveWorkingPageId, WORKING_PAGE_EVENT } from "@/lib/workingPage";
 
 type Tab = "creator" | "publisher" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality" | "radar" | "learningAgent" | "control";
 const controlTabs: Tab[] = ["profile","learning","learningAgent","experiments","audience","fatigue","score","weekly","autopilot","agent","scheduler","loop","dataset","meta","compliance","categories","images","production","operations","quality"];
@@ -206,8 +207,24 @@ export default function EfimeroApp(){
     const allowed:Tab[]=["creator","publisher","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality","radar","learningAgent","control"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
+  useEffect(()=>{
+    fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{
+      const pages=(d.pages||[]).map((x:any)=>({id:String(x.id||x.page_id),name:String(x.name||x.page_name||"Página")}));
+      setWorkspacePages(pages);
+      const resolved=resolveWorkingPageId(pages,d.activePageId);
+      setWorkspacePageId(resolved);
+      if(resolved)void persistWorkingPage(resolved);
+    }).catch(()=>{});
+  },[]);
+  useEffect(()=>{
+    const onWorkingPage=(event:Event)=>{const value=(event as CustomEvent<{pageId:string}>).detail?.pageId;if(value)setWorkspacePageId(value)};
+    window.addEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+    return()=>window.removeEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+  },[]);
   const [mobileNav,setMobileNav]=useState(false);
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
+  const [workspacePages,setWorkspacePages]=useState<{id:string;name:string}[]>([]);
+  const [workspacePageId,setWorkspacePageId]=useState("");
   const [postType,setPostType]=useState<PostType>("Texto");
   const [startTime,setStartTime]=useState("07:00");
   const [endTime,setEndTime]=useState("23:59");
@@ -503,6 +520,8 @@ export default function EfimeroApp(){
   }
 
   const syncLabel=syncState==="synced"?"Supabase sincronizado":syncState==="loading"?"Conectando…":syncState==="error"?"Supabase con error":"Modo local";
+  const workspacePage=workspacePages.find(p=>p.id===workspacePageId);
+  async function changeWorkspacePage(value:string){setWorkspacePageId(value);await persistWorkingPage(value)}
 
   return <div className={sidebarCollapsed?"appShell sidebarIsCollapsed":"appShell"}>
     {mobileNav&&<button className="sidebarBackdrop" aria-label="Cerrar menú" onClick={()=>setMobileNav(false)}/>}
@@ -540,7 +559,7 @@ export default function EfimeroApp(){
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>V1.4 · Creator Studio</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>V1.5 · New Interface</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -553,6 +572,11 @@ export default function EfimeroApp(){
     </header>
 
     <main className={`content contentWithSidebar ${tab==="calendar"?"calendarWide":""}`}>
+      <section className="workspaceBar">
+        <div className="workspaceIdentity"><span className="workspacePulse"/><div><small>ESPACIO DE TRABAJO</small><strong>{workspacePage?.name||"Selecciona una página"}</strong></div></div>
+        <p>Esta página queda fija para generar, programar, publicar y analizar hasta que tú la cambies.</p>
+        <label className="workspacePageField"><span>Página activa</span><select value={workspacePageId} onChange={e=>void changeWorkspacePage(e.target.value)} disabled={!workspacePages.length}><option value="">{workspacePages.length?"Selecciona una página":"Conecta Facebook primero"}</option>{workspacePages.map(page=><option value={page.id} key={page.id}>{page.name}</option>)}</select></label>
+      </section>
       {tab==="creator"&&<>
         <QuickPostStudio categories={categories} library={library} editorialProfile={useEditorialProfile?editorialProfile:null} onSaveItems={saveFactoryItems} onSchedule={({text,category})=>{setPublisherPrefill({text,category,nonce:Date.now()});setTab("publisher")}}/>
         <details className="massBuilder"><summary><span><WandSparkles size={18}/><b>Generación masiva de calendario</b><small>Opcional · crea muchos borradores para varios días</small></span><ChevronRight size={18}/></summary>

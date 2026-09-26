@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, CheckCircle2, Clock3, Image as ImageIcon, Loader2, Save, Send, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { META_MIN_SCHEDULE_MINUTES, isScheduleInFuture, localDateTime, minTimeForDate, nextAllowedSchedule } from "@/lib/scheduling";
+import { persistWorkingPage, resolveWorkingPageId, WORKING_PAGE_EVENT } from "@/lib/workingPage";
 
 type Category={name:string;enabled?:boolean};
 type Page={id:string;name:string};
@@ -26,7 +27,12 @@ export default function SinglePostScheduler({categories,prefill,onAdd,onSaveFavo
   const [imageDataUrl,setImageDataUrl]=useState("");const [fileName,setFileName]=useState("");
   const [compliance,setCompliance]=useState<any>(null);const [busy,setBusy]=useState("");const [notice,setNotice]=useState("");const [error,setError]=useState("");
   const fileRef=useRef<HTMLInputElement>(null);
-  useEffect(()=>{fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{setPages(d.pages||[]);if(d.pages?.length)setPageId(d.activePageId||d.pages[0].id)}).catch(()=>{})},[]);
+  useEffect(()=>{
+    const onWorkingPage=(event:Event)=>{const value=(event as CustomEvent<{pageId:string}>).detail?.pageId;if(value)setPageId(value)};
+    window.addEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+    fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{const list=d.pages||[];setPages(list);if(list.length)setPageId(resolveWorkingPageId(list,d.activePageId))}).catch(()=>{});
+    return()=>window.removeEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+  },[]);
   useEffect(()=>{if(!prefill)return;setText(prefill.text);setCategory(prefill.category||category);const next=nextAllowedSchedule(20);setDate(next.date);setTime(next.time);setCompliance(null);setNotice("Texto recibido desde el generador. Elige fecha y hora.");setError("")},[prefill?.nonce]);
   const page=pages.find(x=>x.id===pageId);const timezone=useMemo(()=>Intl.DateTimeFormat().resolvedOptions().timeZone||"Hora local",[]);
   const validFuture=isScheduleInFuture(date,time,META_MIN_SCHEDULE_MINUTES);
@@ -44,7 +50,7 @@ export default function SinglePostScheduler({categories,prefill,onAdd,onSaveFavo
     <div className="pageIntro"><div><span className="overline">PROGRAMADOR INDIVIDUAL</span><h1>Programa un post como en Business Suite</h1><p>Escribe un copy, adjunta una imagen si quieres y elige exactamente cuándo debe publicarse. Nunca permitimos horarios anteriores al momento actual.</p></div><div className="timezoneBadge"><Clock3 size={16}/><span>{timezone}</span></div></div>
     <section className="singleScheduler">
       <div className="singleComposer">
-        <div className="schedulerFields two"><label><span>Página</span><select value={pageId} onChange={e=>setPageId(e.target.value)}><option value="">Selecciona…</option>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}>{categories.filter(x=>x.enabled!==false).map(c=><option key={c.name}>{c.name}</option>)}</select></label></div>
+        <div className="schedulerFields two"><label><span>Página</span><select value={pageId} onChange={e=>{setPageId(e.target.value);void persistWorkingPage(e.target.value)}}><option value="">Selecciona…</option>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}>{categories.filter(x=>x.enabled!==false).map(c=><option key={c.name}>{c.name}</option>)}</select></label></div>
         <label className="schedulerText"><span>Texto</span><textarea value={text} onChange={e=>{setText(e.target.value);setCompliance(null)}} placeholder="Escribe la publicación…"/></label>
         <div className="mediaDrop" onClick={()=>fileRef.current?.click()}><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={pickImage}/><div><Upload size={22}/><strong>{fileName||"Agregar imagen"}</strong><span>JPG, PNG o WebP · se optimiza antes de enviar</span></div></div>
         {imageDataUrl&&<div className="schedulerPreview"><img src={imageDataUrl} alt="Vista previa"/><button onClick={()=>{setImageDataUrl("");setFileName("")}}><Trash2 size={16}/> Quitar imagen</button></div>}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bookmark, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, GripVertical, Loader2, Send, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { META_MIN_SCHEDULE_MINUTES, isScheduleInFuture, localDateTime, localDateString, minTimeForDate, nextAllowedSchedule } from "@/lib/scheduling";
+import { persistWorkingPage, resolveWorkingPageId, WORKING_PAGE_EVENT } from "@/lib/workingPage";
 
 type Item={id:string;date:string;time:string;category:string;text:string;format:"Texto"|"Imagen";status:string;similarity?:number;imageDataUrl?:string;imageUrl?:string;pageId?:string;pageName?:string;metaPostId?:string;compliance?:any;publishError?:string};
 type Page={id:string;name:string};
@@ -16,7 +17,12 @@ export default function EditorialCalendar({items,onChange,onOpenCreator,onSaveTo
   const [statusFilter,setStatusFilter]=useState("Todos"); const [categoryFilter,setCategoryFilter]=useState("Todas");
   const [busy,setBusy]=useState<string|null>(null); const [message,setMessage]=useState(""); const [error,setError]=useState("");
   const [weekOffset,setWeekOffset]=useState(0);const [now,setNow]=useState(()=>new Date());
-  useEffect(()=>{fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{setPages(d.pages||[]);if(d.pages?.length)setPageId(d.activePageId||d.pages[0].id)}).catch(()=>{})},[]);
+  useEffect(()=>{
+    const onWorkingPage=(event:Event)=>{const value=(event as CustomEvent<{pageId:string}>).detail?.pageId;if(value)setPageId(value)};
+    window.addEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+    fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{const list=d.pages||[];setPages(list);if(list.length)setPageId(resolveWorkingPageId(list,d.activePageId))}).catch(()=>{});
+    return()=>window.removeEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+  },[]);
   useEffect(()=>{const id=setInterval(()=>setNow(new Date()),60_000);return()=>clearInterval(id)},[]);
   const page=pages.find(p=>p.id===pageId);
   const start=useMemo(()=>{const d=new Date();d.setHours(12,0,0,0);const delta=(d.getDay()+6)%7;d.setDate(d.getDate()-delta+weekOffset*7);return d},[weekOffset]);
@@ -71,7 +77,7 @@ export default function EditorialCalendar({items,onChange,onOpenCreator,onSaveTo
   return <>
     <div className="pageIntro calendarIntro"><div><span className="overline">CALENDARIO EDITORIAL</span><h1>Semana más clara, decisiones más rápidas</h1><p>Ahora el calendario usa más espacio, textos más grandes y bloqueo de horarios pasados. Zona horaria: {timezone}.</p></div><button className="outlineButton" onClick={onOpenCreator}><Sparkles size={17}/> Generar contenido</button></div>
     <section className="calendarCommandBar">
-      <label><span>Página</span><select value={pageId} onChange={e=>setPageId(e.target.value)}>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+      <label><span>Página</span><select value={pageId} onChange={e=>{setPageId(e.target.value);void persistWorkingPage(e.target.value)}}>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label><span>Estado</span><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></label>
       <label><span>Categoría</span><select value={categoryFilter} onChange={e=>setCategoryFilter(e.target.value)}>{cats.map(x=><option key={x}>{x}</option>)}</select></label>
       <button onClick={reviewAll}><ShieldCheck size={17}/> Revisar borradores</button><button onClick={scheduleApproved}><CalendarDays size={17}/> Programar aprobados</button>

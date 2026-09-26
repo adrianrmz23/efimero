@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, CloudDownload, ExternalLink, Loader2, RadioTower, RefreshCw, ShieldCheck, Unplug, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { persistWorkingPage, resolveWorkingPageId } from "@/lib/workingPage";
 
 type PageItem = { id:string; name:string; category?:string; fan_count?:number; picture?:{data?:{url?:string}}; tasks?:string[] };
 type MetaPost = { id:string; message:string; createdTime?:string|null; permalinkUrl?:string|null; picture?:string|null; reactions:number; comments:number; shares:number; reach:number };
@@ -49,7 +50,7 @@ export default function MetaPanel({existingPostIds,onImported}:Props){
       const c=await cRes.json();const p=await pRes.json();
       if(cRes.ok)setConnection(c); else if(cRes.status!==404)setError(c.error||"No fue posible comprobar Facebook.");
       const list=p.pages||[];setPages(list);
-      const active=p.activePageId||c.activePageId||list[0]?.id||"";setPageId(active);
+      const active=resolveWorkingPageId(list,p.activePageId||c.activePageId);setPageId(active);
       if(p.error&&!error)setError(p.error);
     }catch{setError("No fue posible conectar con las rutas privadas de Meta.")}
     finally{setLoading(false)}
@@ -74,9 +75,7 @@ export default function MetaPanel({existingPostIds,onImported}:Props){
 
   async function choosePage(value:string){
     setPageId(value);setPosts([]);setSelected([]);
-    if(connection?.connected){
-      try{await fetch("/api/meta/connection",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({activePageId:value})})}catch{}
-    }
+    if(connection?.connected)await persistWorkingPage(value);
   }
 
   async function loadPosts(){

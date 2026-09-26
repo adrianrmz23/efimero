@@ -316,3 +316,7 @@ CHEAPESTINFERENCE_BASE_URL=https://api.cheapestinference.com/v1
 ```
 
 La API key es exclusivamente server-side. No uses prefijo `NEXT_PUBLIC_`.
+
+## V1.5 · New Interface
+
+Rediseño completo de UI con paleta petróleo/turquesa/azul, mejor jerarquía tipográfica y un sistema de formularios unificado. Añade además una página de trabajo persistente: la página seleccionada queda fija para generación, programación y calendario hasta que el usuario la cambie. Consulta `V1_5_REDESIGN.md`.

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Bookmark, CalendarClock, Loader2, RefreshCw, Send, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
+import { persistWorkingPage, resolveWorkingPageId, WORKING_PAGE_EVENT } from "@/lib/workingPage";
 
 type Category={id?:string;name:string;emoji?:string;enabled?:boolean};
 type LibraryItem={text:string;category:string;favorite?:boolean;performanceScore?:number;source?:string};
@@ -38,7 +39,12 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
   const [pageId,setPageId]=useState("");
   const [saved,setSaved]=useState<""|"saved"|"favorite">("");
 
-  useEffect(()=>{fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{setPages(d.pages||[]);if(d.pages?.length)setPageId(d.activePageId||d.pages[0].id)}).catch(()=>{})},[]);
+  useEffect(()=>{
+    const onWorkingPage=(event:Event)=>{const value=(event as CustomEvent<{pageId:string}>).detail?.pageId;if(value)setPageId(value)};
+    window.addEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+    fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{const list=d.pages||[];setPages(list);if(list.length)setPageId(resolveWorkingPageId(list,d.activePageId))}).catch(()=>{});
+    return()=>window.removeEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+  },[]);
   const page=pages.find(x=>x.id===pageId);
   const examples=useMemo(()=>library.filter(x=>x.category===category&&x.source!=="reference").sort((a,b)=>Number(b.favorite)-Number(a.favorite)||(b.performanceScore||0)-(a.performanceScore||0)).slice(0,12).map(x=>x.text),[library,category]);
 
@@ -78,7 +84,7 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
         <label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}>{enabled.map(c=><option key={c.name}>{c.name}</option>)}</select></label>
         <label><span>Tipo de interacción</span><select value={style} onChange={e=>setStyle(e.target.value)}>{styles.map(([name])=><option key={name}>{name}</option>)}</select><small>{styles.find(x=>x[0]===style)?.[1]}</small></label>
         <label><span>Qué quieres provocar</span><textarea value={objective} onChange={e=>setObjective(e.target.value)} rows={3}/></label>
-        <label><span>Página para publicar</span><select value={pageId} onChange={e=>setPageId(e.target.value)}><option value="">Selecciona…</option>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+        <label><span>Página para publicar</span><select value={pageId} onChange={e=>{setPageId(e.target.value);void persistWorkingPage(e.target.value)}}><option value="">Selecciona…</option>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><small>Sincronizada con la página activa global.</small></label>
         <button className="quickGenerate" onClick={generate} disabled={busy}>{busy?<Loader2 className="spin" size={19}/>:text?<RefreshCw size={19}/>:<Sparkles size={19}/>} {busy?"Generando…":text?"Generar otra":"Generar publicación"}</button>
         <div className="qualityNote"><ShieldCheck size={16}/><span>Buscamos conversación natural, no llamadas artificiales a comentar, compartir o reaccionar.</span></div>
       </div>
