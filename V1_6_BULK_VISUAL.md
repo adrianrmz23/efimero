@@ -29,3 +29,11 @@ Las publicaciones programadas se guardan en `efimero_scheduled_posts` con format
 ### Imágenes
 
 La imagen se comprime en el navegador y se envía directamente a Meta al crear la publicación programada. Efímero no almacena las imágenes originales en Supabase Storage en esta versión, evitando duplicar almacenamiento innecesariamente.
+
+## V1.6.1 · Safe Queue
+
+- Nueva sección **Cola Meta**: consulta directamente `/{page-id}/scheduled_posts` y muestra lo que Facebook todavía tiene pendiente.
+- Permite seleccionar una o varias publicaciones y cancelarlas directamente en Meta.
+- Eliminar una tarjeta `Programado` desde Calendario ya no la borra solo de la UI: primero cancela el post en Meta y solo después lo elimina de Supabase/Efímero.
+- Si falta el `meta_post_id`, Efímero bloquea el borrado inseguro y dirige a Cola Meta.
+- Los borradores/no programados sí se eliminan localmente y de Supabase.

@@ -324,3 +324,7 @@ La API key es exclusivamente server-side. No uses prefijo `NEXT_PUBLIC_`.
 ## V1.5 · New Interface
 
 Rediseño completo de UI con paleta petróleo/turquesa/azul, mejor jerarquía tipográfica y un sistema de formularios unificado. Añade además una página de trabajo persistente: la página seleccionada queda fija para generación, programación y calendario hasta que el usuario la cambie. Consulta `V1_5_REDESIGN.md`.
+
+## V1.6.1 · Safe Queue
+
+Se añadió `Principal → Cola Meta` para consultar directamente las publicaciones programadas que Facebook aún conserva. La cancelación individual o masiva elimina primero el post programado en Meta y después limpia Supabase/Efímero. El Calendario ya no permite borrar silenciosamente una pieza que ya está programada en Facebook.

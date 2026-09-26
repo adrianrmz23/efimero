@@ -113,7 +113,7 @@ export default function BulkImageScheduler({onAddMany}:Props){
   }
 
   function removeItem(id:string){if(busy)return;setItems(current=>current.filter(x=>x.id!==id))}
-  function clearQueue(){if(busy)return;setItems([]);setNotice("");setError("")}
+  function clearQueue(){if(busy)return;if(items.some(x=>x.status==="scheduled")&&!window.confirm("Esto solo limpiará la vista del lote. NO cancela publicaciones que Facebook ya tiene programadas. Para cancelarlas usa ‘Cola Meta’. ¿Continuar?"))return;setItems([]);setNotice("");setError("")}
   function resetFailures(){setItems(current=>current.map(x=>x.status==="error"?{...x,status:"ready" as const,error:undefined}:x));setError("")}
 
   async function persistScheduled(item:BulkImageItem,status:"Programado"|"Error",message:string,metaPostId?:string,publishError?:string){
