@@ -29,9 +29,10 @@ import AutonomousEditor from "@/components/AutonomousEditor";
 import EditorialScoring from "@/components/EditorialScoring";
 import WeeklyReport from "@/components/WeeklyReport";
 import QualityCenter from "@/components/QualityCenter";
+import InspirationRadar from "@/components/InspirationRadar";
 import LogoutButton from "@/components/auth/LogoutButton";
 
-type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality";
+type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality" | "radar";
 type PostType = "Texto" | "Imagen" | "Híbrido";
 type ScheduleItem = { id:string; date:string; time:string; category:string; text:string; format:"Texto"|"Imagen"; status:"Borrador"|"Revisión"|"Aprobado"|"Programado"|"Publicado"|"Error"; similarity?:number; imageDataUrl?:string; imageUrl?:string; pageId?:string; pageName?:string; metaPostId?:string; compliance?:any; publishError?:string; autopilot?:boolean };
 type Category = { id:string; name:string; emoji:string; enabled:boolean };
@@ -195,7 +196,7 @@ export default function EfimeroApp(){
   const [tab,setTab]=useState<Tab>("creator");
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
-    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality"];
+    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality","radar"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
   const [mobileNav,setMobileNav]=useState(false);
@@ -384,7 +385,7 @@ export default function EfimeroApp(){
     });
     if(!supabase)return;
     const rows=items.map(item=>({
-      text:item.text,category:item.category,format:item.format,status:item.source==="historical"?"historical":"generated",source:item.source||"generated",
+      text:item.text,category:item.category,format:item.format,status:item.source==="historical"?"historical":item.source==="reference"?"reference":"generated",source:item.source||"generated",
       source_url:item.sourceUrl||null,notes:item.notes||null,reactions:item.reactions||0,comments:item.comments||0,shares:item.shares||0,reach:item.reach||0,
       published_at:item.publishedAt||null,performance_score:item.performanceScore||0,favorite:Boolean(item.favorite),generation_batch:item.generationBatch||null,
       platform:item.platform||null,platform_post_id:item.platformPostId||null,source_page_id:item.sourcePageId||null,source_page_name:item.sourcePageName||null,
@@ -523,6 +524,7 @@ export default function EfimeroApp(){
 
         <SidebarGroup label="Inteligencia" collapsed={sidebarCollapsed}>
           <Nav active={tab==="library"} onClick={()=>{setTab("library");setMobileNav(false)}} icon={Library} label="Biblioteca"/>
+          <Nav active={tab==="radar"} onClick={()=>{setTab("radar");setMobileNav(false)}} icon={Search} label="Radar inspiración"/>
           <Nav active={tab==="profile"} onClick={()=>{setTab("profile");setMobileNav(false)}} icon={Fingerprint} label="Huella"/>
           <Nav active={tab==="learning"} onClick={()=>{setTab("learning");setMobileNav(false)}} icon={BrainCircuit} label="Aprendizaje"/>
           <Nav active={tab==="experiments"} onClick={()=>{setTab("experiments");setMobileNav(false)}} icon={FlaskConical} label="Experimentos"/>
@@ -558,7 +560,7 @@ export default function EfimeroApp(){
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>V1 · Bloques 25–28</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>V1.1 · Bloque 29</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -656,6 +658,8 @@ export default function EfimeroApp(){
       {tab==="weekly"&&<WeeklyReport/>}
 
       {tab==="quality"&&<QualityCenter/>}
+
+      {tab==="radar"&&<InspirationRadar library={library} onSaveItems={saveFactoryItems}/>}
 
       {tab==="operations"&&<OperationsCenter schedule={schedule} library={library}/>}
     </main>

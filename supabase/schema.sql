@@ -434,3 +434,39 @@ begin
     execute format('create policy "efimero_authenticated_full_access" on public.%I for all to authenticated using (true) with check (true)', t);
   end loop;
 end $$;
+
+-- Bloque 29: Radar de inspiración externa (monitoreo asistido, no scraping masivo)
+create table if not exists efimero_inspiration_watchlist (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null,
+  page_url text not null,
+  notes text,
+  enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists efimero_inspiration_watchlist_owner_idx on efimero_inspiration_watchlist(owner_user_id,created_at desc);
+
+create table if not exists efimero_inspiration_runs (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  watchlist_id uuid references efimero_inspiration_watchlist(id) on delete set null,
+  source_text text not null,
+  mode text not null,
+  result jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists efimero_inspiration_runs_owner_idx on efimero_inspiration_runs(owner_user_id,created_at desc);
+
+do $$
+declare
+  t text;
+  tables text[] := array['efimero_inspiration_watchlist','efimero_inspiration_runs'];
+begin
+  foreach t in array tables loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "efimero_authenticated_full_access" on public.%I', t);
+    execute format('create policy "efimero_authenticated_full_access" on public.%I for all to authenticated using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid())', t);
+  end loop;
+end $$;

@@ -1,5 +1,41 @@
-# Efímero Content Engine — V1 completa · Bloques 1–28
+# Efímero Content Engine — V1.1 · Bloques 1–29
 
+
+## Bloque 29 — Radar de inspiración
+
+- **Watchlist** de páginas externas para monitoreo asistido. No realiza scraping masivo.
+- Captura manual de referencias mediante texto, permalink o screenshot.
+- Visión IA extrae el copy principal de una captura y abstrae categoría, tono, hook, estructura, tema y mecanismo editorial.
+- Tres modos de variación: mismo patrón con tema nuevo, mismo tema con estructura nueva y solo mecanismo psicológico.
+- Comparación de similitud contra la referencia, la Biblioteca y el Dataset editorial.
+- Variaciones demasiado cercanas quedan bloqueadas antes de guardar.
+- Todas las salidas vuelven a pasar por **Compliance Meta**.
+- Las referencias externas se guardan como `source=reference`; sirven para estudiar patrones, no como ejemplos literales de la Fábrica.
+
+### Supabase
+
+Vuelve a ejecutar `supabase/schema.sql` para crear:
+
+- `efimero_inspiration_watchlist`
+- `efimero_inspiration_runs`
+
+No se requieren nuevas variables de entorno. Para analizar screenshots sigue siendo necesaria `OPENAI_API_KEY` / `OPENAI_VISION_MODEL`.
+
+### Flujo
+
+```text
+Watchlist / captura
+      ↓
+Análisis de patrón
+      ↓
+Variaciones nuevas
+      ↓
+Similitud referencia + Dataset
+      ↓
+Compliance Meta
+      ↓
+Biblioteca
+```
 
 ## Bloques 25–28 — Cierre de la V1
 

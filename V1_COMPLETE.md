@@ -14,3 +14,8 @@ La V1 llega hasta el Bloque 28. A partir de aquí conviene usar la plataforma co
 
 ## Principio de la V1
 La plataforma informa y automatiza tareas repetitivas, pero no presenta scores como garantía de viralidad o monetización. Compliance Meta permanece obligatorio antes de publicación.
+
+
+## V1.1 · Radar de inspiración
+
+El Bloque 29 añade inspiración externa con captura asistida, análisis multimodal, filtros de similitud y Compliance. No depende de scraping masivo de Facebook.
