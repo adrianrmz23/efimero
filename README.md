@@ -233,3 +233,13 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 ### Configuración de automatización
 Lee `AUTOMATION_SETUP.md` antes de activar tareas periódicas en Vercel.
+
+## V1.2 · Radar API + navegación compacta
+
+- Radar de inspiración conectado a Bright Data `Facebook - Pages Posts by Profile URL`.
+- Watchlist con sincronización de 10/25/50/100 publicaciones.
+- Persistencia de posts externos en Supabase.
+- Análisis IA de cualquier post monitorizado y generación con novedad + Compliance.
+- Sidebar reducido a Principal, Consultar y Sistema.
+- Centro de control agrupa inteligencia avanzada, automatización, Meta y administración.
+- Ver `BRIGHTDATA_SETUP.md`.

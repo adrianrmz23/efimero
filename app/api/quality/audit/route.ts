@@ -26,6 +26,7 @@ export async function GET(){
       {id:"meta",label:"Meta OAuth",status:connection?.status==="connected"?"pass":"fail",detail:connection?.status||"Sin conexión"},
       {id:"meta-token",label:"Vigencia del User Token",status:tokenDays===null?"warn":tokenDays<=7?"warn":"pass",detail:tokenDays===null?"Sin fecha reportada":`${tokenDays} días restantes`},
       {id:"openai",label:"OpenAI",status:process.env.OPENAI_API_KEY?"pass":"fail",detail:process.env.OPENAI_API_KEY?"Configurado":"Falta OPENAI_API_KEY"},
+      {id:"brightdata",label:"Bright Data Radar",status:process.env.BRIGHTDATA_API_KEY&&process.env.BRIGHTDATA_FACEBOOK_POSTS_DATASET_ID?"pass":"warn",detail:process.env.BRIGHTDATA_API_KEY&&process.env.BRIGHTDATA_FACEBOOK_POSTS_DATASET_ID?"Configurado":"Faltan credenciales del Radar externo"},
       {id:"cron",label:"CRON_SECRET",status:process.env.CRON_SECRET?"pass":"warn",detail:process.env.CRON_SECRET?"Configurado":"Sin automatización externa protegida"},
       {id:"dataset",label:"Dataset editorial",status:(datasetQ.count||0)>=50?"pass":(datasetQ.count||0)>0?"warn":"fail",detail:`${datasetQ.count||0} textos indexados`},
       {id:"compliance",label:"Compliance en cola",status:withoutPass===0?"pass":"warn",detail:withoutPass?`${withoutPass} piezas aprobadas/programadas sin PASS`:"Todas las piezas activas tienen PASS"},

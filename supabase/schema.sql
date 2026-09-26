@@ -470,3 +470,32 @@ begin
     execute format('create policy "efimero_authenticated_full_access" on public.%I for all to authenticated using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid())', t);
   end loop;
 end $$;
+
+-- V1.2: Radar externo con Bright Data
+alter table efimero_inspiration_watchlist add column if not exists provider text not null default 'brightdata';
+alter table efimero_inspiration_watchlist add column if not exists last_synced_at timestamptz;
+alter table efimero_inspiration_watchlist add column if not exists sync_status text not null default 'idle';
+alter table efimero_inspiration_watchlist add column if not exists last_sync_error text;
+alter table efimero_inspiration_watchlist add column if not exists last_snapshot_id text;
+
+create table if not exists efimero_inspiration_posts (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  watchlist_id uuid not null references efimero_inspiration_watchlist(id) on delete cascade,
+  provider text not null default 'brightdata',
+  provider_post_id text not null,
+  post_url text,
+  text text not null default '',
+  posted_at timestamptz,
+  reactions bigint not null default 0,
+  comments bigint not null default 0,
+  shares bigint not null default 0,
+  raw jsonb not null default '{}'::jsonb,
+  captured_at timestamptz not null default now(),
+  unique(watchlist_id,provider_post_id)
+);
+create index if not exists efimero_inspiration_posts_owner_idx on efimero_inspiration_posts(owner_user_id,captured_at desc);
+create index if not exists efimero_inspiration_posts_watch_idx on efimero_inspiration_posts(watchlist_id,posted_at desc);
+alter table efimero_inspiration_posts enable row level security;
+drop policy if exists "efimero_authenticated_full_access" on efimero_inspiration_posts;
+create policy "efimero_authenticated_full_access" on efimero_inspiration_posts for all to authenticated using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid());

@@ -30,9 +30,11 @@ import EditorialScoring from "@/components/EditorialScoring";
 import WeeklyReport from "@/components/WeeklyReport";
 import QualityCenter from "@/components/QualityCenter";
 import InspirationRadar from "@/components/InspirationRadar";
+import ControlCenter from "@/components/ControlCenter";
 import LogoutButton from "@/components/auth/LogoutButton";
 
-type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality" | "radar";
+type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality" | "radar" | "control";
+const controlTabs: Tab[] = ["profile","learning","experiments","audience","fatigue","score","weekly","autopilot","agent","scheduler","loop","dataset","meta","compliance","categories","images","production","operations","quality"];
 type PostType = "Texto" | "Imagen" | "Híbrido";
 type ScheduleItem = { id:string; date:string; time:string; category:string; text:string; format:"Texto"|"Imagen"; status:"Borrador"|"Revisión"|"Aprobado"|"Programado"|"Publicado"|"Error"; similarity?:number; imageDataUrl?:string; imageUrl?:string; pageId?:string; pageName?:string; metaPostId?:string; compliance?:any; publishError?:string; autopilot?:boolean };
 type Category = { id:string; name:string; emoji:string; enabled:boolean };
@@ -196,7 +198,7 @@ export default function EfimeroApp(){
   const [tab,setTab]=useState<Tab>("creator");
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
-    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality","radar"];
+    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality","radar","control"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
   const [mobileNav,setMobileNav]=useState(false);
@@ -514,53 +516,29 @@ export default function EfimeroApp(){
       </div>
 
       <div className="sidebarScroll">
-        <SidebarGroup label="Producción" collapsed={sidebarCollapsed}>
+        <SidebarGroup label="Principal" collapsed={sidebarCollapsed}>
           <Nav active={tab==="creator"} onClick={()=>{setTab("creator");setMobileNav(false)}} icon={WandSparkles} label="Crear"/>
           <Nav active={tab==="factory"} onClick={()=>{setTab("factory");setMobileNav(false)}} icon={Zap} label="Fábrica"/>
+          <Nav active={tab==="radar"} onClick={()=>{setTab("radar");setMobileNav(false)}} icon={Search} label="Radar inspiración"/>
           <Nav active={tab==="calendar"} onClick={()=>{setTab("calendar");setMobileNav(false)}} icon={CalendarDays} label="Calendario"/>
-          <Nav active={tab==="autopilot"} onClick={()=>{setTab("autopilot");setMobileNav(false)}} icon={Sparkles} label="Autopilot"/>
           <Nav active={tab==="queue"} onClick={()=>{setTab("queue");setMobileNav(false)}} icon={ClipboardCheck} label="Bandeja"/>
         </SidebarGroup>
 
-        <SidebarGroup label="Inteligencia" collapsed={sidebarCollapsed}>
+        <SidebarGroup label="Consultar" collapsed={sidebarCollapsed}>
           <Nav active={tab==="library"} onClick={()=>{setTab("library");setMobileNav(false)}} icon={Library} label="Biblioteca"/>
-          <Nav active={tab==="radar"} onClick={()=>{setTab("radar");setMobileNav(false)}} icon={Search} label="Radar inspiración"/>
-          <Nav active={tab==="profile"} onClick={()=>{setTab("profile");setMobileNav(false)}} icon={Fingerprint} label="Huella"/>
-          <Nav active={tab==="learning"} onClick={()=>{setTab("learning");setMobileNav(false)}} icon={BrainCircuit} label="Aprendizaje"/>
-          <Nav active={tab==="experiments"} onClick={()=>{setTab("experiments");setMobileNav(false)}} icon={FlaskConical} label="Experimentos"/>
-          <Nav active={tab==="audience"} onClick={()=>{setTab("audience");setMobileNav(false)}} icon={MessagesSquare} label="Audiencia"/>
           <Nav active={tab==="analytics"} onClick={()=>{setTab("analytics");setMobileNav(false)}} icon={BarChart3} label="Analytics"/>
           <Nav active={tab==="executive"} onClick={()=>{setTab("executive");setMobileNav(false)}} icon={LayoutDashboard} label="Resumen"/>
-          <Nav active={tab==="fatigue"} onClick={()=>{setTab("fatigue");setMobileNav(false)}} icon={Gauge} label="Fatiga"/>
-          <Nav active={tab==="score"} onClick={()=>{setTab("score");setMobileNav(false)}} icon={Gauge} label="Scoring"/>
-          <Nav active={tab==="weekly"} onClick={()=>{setTab("weekly");setMobileNav(false)}} icon={FileText} label="Reporte semanal"/>
         </SidebarGroup>
 
-        <SidebarGroup label="Facebook" collapsed={sidebarCollapsed}>
-          <Nav active={tab==="meta"} onClick={()=>{setTab("meta");setMobileNav(false)}} icon={RadioTower} label="Meta"/>
-          <Nav active={tab==="compliance"} onClick={()=>{setTab("compliance");setMobileNav(false)}} icon={ShieldCheck} label="Compliance"/>
-        </SidebarGroup>
-
-        <SidebarGroup label="Automatización" collapsed={sidebarCollapsed}>
-          <Nav active={tab==="agent"} onClick={()=>{setTab("agent");setMobileNav(false)}} icon={Sparkles} label="Agente editorial"/>
-          <Nav active={tab==="scheduler"} onClick={()=>{setTab("scheduler");setMobileNav(false)}} icon={CalendarDays} label="Scheduler"/>
-          <Nav active={tab==="loop"} onClick={()=>{setTab("loop");setMobileNav(false)}} icon={TrendingUp} label="Ciclo vivo"/>
-          <Nav active={tab==="dataset"} onClick={()=>{setTab("dataset");setMobileNav(false)}} icon={Database} label="Dataset"/>
-          <Nav active={tab==="production"} onClick={()=>{setTab("production");setMobileNav(false)}} icon={ShieldCheck} label="Producción"/>
-        </SidebarGroup>
-
-        <SidebarGroup label="Configuración" collapsed={sidebarCollapsed}>
-          <Nav active={tab==="categories"} onClick={()=>{setTab("categories");setMobileNav(false)}} icon={Layers3} label="Categorías"/>
-          <Nav active={tab==="images"} onClick={()=>{setTab("images");setMobileNav(false)}} icon={ImageIcon} label="Imágenes"/>
-          <Nav active={tab==="operations"} onClick={()=>{setTab("operations");setMobileNav(false)}} icon={Activity} label="Operaciones"/>
-          <Nav active={tab==="quality"} onClick={()=>{setTab("quality");setMobileNav(false)}} icon={Settings2} label="QA final"/>
+        <SidebarGroup label="Sistema" collapsed={sidebarCollapsed}>
+          <Nav active={tab==="control"||controlTabs.includes(tab)} onClick={()=>{setTab("control");setMobileNav(false)}} icon={Settings2} label="Centro de control"/>
         </SidebarGroup>
       </div>
 
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>V1.1 · Bloque 29</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>V1.2 · Radar API</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -660,6 +638,8 @@ export default function EfimeroApp(){
       {tab==="quality"&&<QualityCenter/>}
 
       {tab==="radar"&&<InspirationRadar library={library} onSaveItems={saveFactoryItems}/>}
+
+      {tab==="control"&&<ControlCenter onNavigate={(next)=>setTab(next as Tab)}/>}
 
       {tab==="operations"&&<OperationsCenter schedule={schedule} library={library}/>}
     </main>
