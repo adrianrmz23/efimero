@@ -111,9 +111,8 @@ export async function startBrightDataFacebookScrape(input: {
 }) {
   const { apiKey, datasetId } = getConfig();
   const params = new URLSearchParams({ dataset_id: datasetId, format: "json", include_errors: "true" });
-  // Este dataset usa discovery por URL de perfil/página.
-  params.set("type", "discover_new");
-  params.set("discover_by", "profile_url");
+  // "Facebook - Pages Posts by Profile URL" recibe la URL directamente.
+  // No usa parámetros de discovery; añadirlos provoca "Incorrect discovery collector id".
   const payload: Record<string, unknown> = {
     url: input.url,
     num_of_posts: Math.max(1, Math.min(100, Math.round(input.numPosts || 25))),
