@@ -25,9 +25,13 @@ import PublishingScheduler from "@/components/PublishingScheduler";
 import LearningLoop from "@/components/LearningLoop";
 import EditorialDataset from "@/components/EditorialDataset";
 import ProductionReadiness from "@/components/ProductionReadiness";
+import AutonomousEditor from "@/components/AutonomousEditor";
+import EditorialScoring from "@/components/EditorialScoring";
+import WeeklyReport from "@/components/WeeklyReport";
+import QualityCenter from "@/components/QualityCenter";
 import LogoutButton from "@/components/auth/LogoutButton";
 
-type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production";
+type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality";
 type PostType = "Texto" | "Imagen" | "Híbrido";
 type ScheduleItem = { id:string; date:string; time:string; category:string; text:string; format:"Texto"|"Imagen"; status:"Borrador"|"Revisión"|"Aprobado"|"Programado"|"Publicado"|"Error"; similarity?:number; imageDataUrl?:string; imageUrl?:string; pageId?:string; pageName?:string; metaPostId?:string; compliance?:any; publishError?:string; autopilot?:boolean };
 type Category = { id:string; name:string; emoji:string; enabled:boolean };
@@ -191,7 +195,7 @@ export default function EfimeroApp(){
   const [tab,setTab]=useState<Tab>("creator");
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
-    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production"];
+    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
   const [mobileNav,setMobileNav]=useState(false);
@@ -526,6 +530,8 @@ export default function EfimeroApp(){
           <Nav active={tab==="analytics"} onClick={()=>{setTab("analytics");setMobileNav(false)}} icon={BarChart3} label="Analytics"/>
           <Nav active={tab==="executive"} onClick={()=>{setTab("executive");setMobileNav(false)}} icon={LayoutDashboard} label="Resumen"/>
           <Nav active={tab==="fatigue"} onClick={()=>{setTab("fatigue");setMobileNav(false)}} icon={Gauge} label="Fatiga"/>
+          <Nav active={tab==="score"} onClick={()=>{setTab("score");setMobileNav(false)}} icon={Gauge} label="Scoring"/>
+          <Nav active={tab==="weekly"} onClick={()=>{setTab("weekly");setMobileNav(false)}} icon={FileText} label="Reporte semanal"/>
         </SidebarGroup>
 
         <SidebarGroup label="Facebook" collapsed={sidebarCollapsed}>
@@ -534,6 +540,7 @@ export default function EfimeroApp(){
         </SidebarGroup>
 
         <SidebarGroup label="Automatización" collapsed={sidebarCollapsed}>
+          <Nav active={tab==="agent"} onClick={()=>{setTab("agent");setMobileNav(false)}} icon={Sparkles} label="Agente editorial"/>
           <Nav active={tab==="scheduler"} onClick={()=>{setTab("scheduler");setMobileNav(false)}} icon={CalendarDays} label="Scheduler"/>
           <Nav active={tab==="loop"} onClick={()=>{setTab("loop");setMobileNav(false)}} icon={TrendingUp} label="Ciclo vivo"/>
           <Nav active={tab==="dataset"} onClick={()=>{setTab("dataset");setMobileNav(false)}} icon={Database} label="Dataset"/>
@@ -544,13 +551,14 @@ export default function EfimeroApp(){
           <Nav active={tab==="categories"} onClick={()=>{setTab("categories");setMobileNav(false)}} icon={Layers3} label="Categorías"/>
           <Nav active={tab==="images"} onClick={()=>{setTab("images");setMobileNav(false)}} icon={ImageIcon} label="Imágenes"/>
           <Nav active={tab==="operations"} onClick={()=>{setTab("operations");setMobileNav(false)}} icon={Activity} label="Operaciones"/>
+          <Nav active={tab==="quality"} onClick={()=>{setTab("quality");setMobileNav(false)}} icon={Settings2} label="QA final"/>
         </SidebarGroup>
       </div>
 
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>Bloques 21–24</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>V1 · Bloques 25–28</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -640,6 +648,14 @@ export default function EfimeroApp(){
       {tab==="dataset"&&<EditorialDataset/>}
 
       {tab==="production"&&<ProductionReadiness/>}
+
+      {tab==="agent"&&<AutonomousEditor onQueue={(items:any[])=>{setSchedule(current=>[...current,...items] as ScheduleItem[]);setTab("queue")}}/>}
+
+      {tab==="score"&&<EditorialScoring/>}
+
+      {tab==="weekly"&&<WeeklyReport/>}
+
+      {tab==="quality"&&<QualityCenter/>}
 
       {tab==="operations"&&<OperationsCenter schedule={schedule} library={library}/>}
     </main>

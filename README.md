@@ -1,4 +1,34 @@
-# Efímero Content Engine — Bloques 9 a 12
+# Efímero Content Engine — V1 completa · Bloques 1–28
+
+
+## Bloques 25–28 — Cierre de la V1
+
+- **25 · Agente editorial autónomo:** detecta huecos reales del calendario, consulta fatiga, aprendizaje y dataset, redacta propuestas, calcula score y aplica Compliance. No publica directamente: las piezas PASS pasan a Bandeja.
+- **26 · Scoring explicable:** desglosa Compliance, novedad, alineación histórica, señal histórica, longitud y anti-fatiga. El score es compatibilidad editorial, **no** predicción de viralidad.
+- **27 · Reporte semanal:** resume datos observados de los últimos 7 días, experimentos, riesgos y siguientes pruebas. Se guarda en Supabase y puede generarse manualmente o desde `/api/cron/weekly-report`.
+- **28 · QA + UX final:** auditoría de login, Supabase, Meta OAuth, tokens, OpenAI, CRON, dataset, Compliance, duplicados, jobs fallidos, páginas legales y deuda de configuración. También añade mejoras globales de foco, loading y `prefers-reduced-motion`.
+
+### Flujo V1
+
+```text
+Facebook histórico + Dataset
+        ↓
+Agente / Fábrica
+        ↓
+Scoring explicable
+        ↓
+Compliance Meta
+        ↓
+Bandeja / Calendario
+        ↓
+Scheduler / Facebook
+        ↓
+Métricas 1h · 24h · 72h · 7d
+        ↓
+Aprendizaje + Reporte semanal
+        ↓
+Nueva producción informada
+```
 
 Esta entrega cierra el primer ciclo operativo de Efímero: **generar → revisar políticas → calendarizar → crear imagen → programar/publicar en Facebook**.
 

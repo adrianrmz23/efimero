@@ -56,3 +56,21 @@ Ya existen y son públicas:
 - `/data-deletion`
 
 Puedes usarlas directamente en Meta Developers con el dominio de producción.
+
+
+## 7) Reporte semanal automático · Bloque 27
+Endpoint protegido por `CRON_SECRET`:
+`GET /api/cron/weekly-report`
+
+El endpoint genera un reporte por cada conexión Meta activa y lo guarda en `efimero_weekly_reports`. Puedes invocarlo desde Vercel Cron o cualquier scheduler que envíe `Authorization: Bearer $CRON_SECRET`.
+
+Ejemplo semanal (UTC):
+```json
+{"path":"/api/cron/weekly-report","schedule":"0 15 * * 1"}
+```
+
+## 8) Agente y QA · Bloques 25–28
+- **Automatización → Agente editorial:** detecta huecos y propone hasta 8 textos por ejecución.
+- **Inteligencia → Scoring:** explica por qué un texto suma o resta.
+- **Inteligencia → Reporte semanal:** genera/rescata los últimos reportes.
+- **Configuración → QA final:** ejecuta un checklist de producción y guarda snapshots en `efimero_quality_audits`.

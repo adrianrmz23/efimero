@@ -360,3 +360,77 @@ begin
     execute format('create policy "efimero_authenticated_full_access" on public.%I for all to authenticated using (true) with check (true)', t);
   end loop;
 end $$;
+
+-- Bloques 25–28: agente autónomo, scoring explicable, reporte semanal y QA final
+alter table efimero_scheduled_posts add column if not exists editorial_score numeric;
+alter table efimero_scheduled_posts add column if not exists score_data jsonb not null default '{}'::jsonb;
+
+create table if not exists efimero_agent_runs (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  page_id text,
+  page_name text,
+  horizon_days integer not null default 7,
+  objective text,
+  calendar_context jsonb not null default '{}'::jsonb,
+  context jsonb not null default '{}'::jsonb,
+  plan jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists efimero_agent_runs_owner_idx on efimero_agent_runs(owner_user_id,created_at desc);
+create index if not exists efimero_agent_runs_page_idx on efimero_agent_runs(page_id,created_at desc);
+
+create table if not exists efimero_editorial_scores (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  page_id text,
+  text text not null,
+  category text,
+  score numeric not null default 0,
+  verdict text,
+  breakdown jsonb not null default '{}'::jsonb,
+  reasons jsonb not null default '[]'::jsonb,
+  warnings jsonb not null default '[]'::jsonb,
+  nearest jsonb not null default '[]'::jsonb,
+  compliance_data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists efimero_editorial_scores_owner_idx on efimero_editorial_scores(owner_user_id,created_at desc);
+
+create table if not exists efimero_weekly_reports (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  page_id text,
+  page_name text,
+  period_start timestamptz not null,
+  period_end timestamptz not null,
+  metrics jsonb not null default '{}'::jsonb,
+  report jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists efimero_weekly_reports_owner_idx on efimero_weekly_reports(owner_user_id,created_at desc);
+create index if not exists efimero_weekly_reports_page_idx on efimero_weekly_reports(page_id,created_at desc);
+
+create table if not exists efimero_quality_audits (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  score numeric not null default 0,
+  level text,
+  checks jsonb not null default '[]'::jsonb,
+  counts jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists efimero_quality_audits_owner_idx on efimero_quality_audits(owner_user_id,created_at desc);
+
+-- RLS Bloques 25–28
+do $$
+declare
+  t text;
+  tables text[] := array['efimero_agent_runs','efimero_editorial_scores','efimero_weekly_reports','efimero_quality_audits'];
+begin
+  foreach t in array tables loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "efimero_authenticated_full_access" on public.%I', t);
+    execute format('create policy "efimero_authenticated_full_access" on public.%I for all to authenticated using (true) with check (true)', t);
+  end loop;
+end $$;
