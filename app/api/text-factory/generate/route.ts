@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { localComplianceReview, sanitizeEngagementBait } from "@/lib/metaCompliance";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { createEmbeddings, vectorLiteral } from "@/lib/embeddings";
 
 type Example = {
   text: string;
@@ -26,10 +28,22 @@ export async function POST(request: NextRequest) {
   const category = String(body.category || "Automática");
   const objective = String(body.objective || "Equilibrado");
   const length = String(body.length || "Automática");
-  const examples: Example[] = Array.isArray(body.examples) ? body.examples.slice(0, 24) : [];
+  let examples: Example[] = Array.isArray(body.examples) ? body.examples.slice(0, 24) : [];
   const profile = body.profile && typeof body.profile === "object" ? body.profile : null;
   const learningProfile = body.learningProfile && typeof body.learningProfile === "object" ? body.learningProfile : null;
   const apiKey = process.env.OPENAI_API_KEY;
+
+  // Bloque 23: recupera ejemplos semánticamente cercanos del dataset editorial.
+  if (apiKey && body.smartDataset !== false) {
+    try {
+      const admin = getSupabaseAdmin();
+      const [embedding] = await createEmbeddings([`Categoría ${category}. Objetivo ${objective}. Longitud ${length}. Texto para Facebook sin engagement bait.`]);
+      const { data } = await admin.rpc("match_efimero_dataset", { query_embedding: vectorLiteral(embedding), match_count: 12, filter_category: category === "Automática" ? null : category });
+      const smart: Example[] = (data || []).map((x:any)=>({text:String(x.text||""),category:String(x.category||"General"),performanceScore:Number(x.performance_score||0),hook:String(x.hook||"")}));
+      const seen = new Set(examples.map(x=>x.text.trim().toLowerCase()));
+      examples = [...smart.filter(x=>x.text && !seen.has(x.text.trim().toLowerCase())), ...examples].slice(0,24);
+    } catch {}
+  }
 
   if (!apiKey) {
     return NextResponse.json({

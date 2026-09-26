@@ -1,6 +1,6 @@
 {
   "name": "efimero-content-engine",
-  "version": "0.16.0",
+  "version": "0.24.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

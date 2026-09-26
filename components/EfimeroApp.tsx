@@ -21,9 +21,13 @@ import TextQueue from "@/components/TextQueue";
 import FatigueRadar from "@/components/FatigueRadar";
 import ComplianceCenter from "@/components/ComplianceCenter";
 import OperationsCenter from "@/components/OperationsCenter";
+import PublishingScheduler from "@/components/PublishingScheduler";
+import LearningLoop from "@/components/LearningLoop";
+import EditorialDataset from "@/components/EditorialDataset";
+import ProductionReadiness from "@/components/ProductionReadiness";
 import LogoutButton from "@/components/auth/LogoutButton";
 
-type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations";
+type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production";
 type PostType = "Texto" | "Imagen" | "Híbrido";
 type ScheduleItem = { id:string; date:string; time:string; category:string; text:string; format:"Texto"|"Imagen"; status:"Borrador"|"Revisión"|"Aprobado"|"Programado"|"Publicado"|"Error"; similarity?:number; imageDataUrl?:string; imageUrl?:string; pageId?:string; pageName?:string; metaPostId?:string; compliance?:any; publishError?:string; autopilot?:boolean };
 type Category = { id:string; name:string; emoji:string; enabled:boolean };
@@ -187,7 +191,7 @@ export default function EfimeroApp(){
   const [tab,setTab]=useState<Tab>("creator");
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
-    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations"];
+    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
   const [mobileNav,setMobileNav]=useState(false);
@@ -346,7 +350,7 @@ export default function EfimeroApp(){
       if(supabase){
         const {data:cal,error}=await supabase.from("efimero_calendars").insert({name:`Efímero ${startDate}`,start_date:startDate,days:effectiveDays,settings:{posts:reviewedGenerated.length,frequency:effectiveFrequency,postType,skipRanges,useAI,useEditorialProfile,profileSample:editorialProfile?.sampleSize||0}}).select("id").single();
         if(!error&&cal){
-          const rows=reviewedGenerated.map(p=>({id:p.id,calendar_id:cal.id,publish_at:`${p.date}T${p.time}:00`,text:p.text,category:p.category,format:p.format,status:"draft",fingerprint:fingerprint(p.text),similarity_score:p.similarity||0}));
+          const rows=reviewedGenerated.map(p=>({id:p.id,calendar_id:cal.id,publish_at:`${p.date}T${p.time}:00`,publish_at_utc:new Date(`${p.date}T${p.time}:00-06:00`).toISOString(),text:p.text,category:p.category,format:p.format,status:"draft",fingerprint:fingerprint(p.text),similarity_score:p.similarity||0}));
           for(let i=0;i<rows.length;i+=300) await supabase.from("efimero_scheduled_posts").insert(rows.slice(i,i+300));
           setSyncState("synced");
         }
@@ -529,6 +533,13 @@ export default function EfimeroApp(){
           <Nav active={tab==="compliance"} onClick={()=>{setTab("compliance");setMobileNav(false)}} icon={ShieldCheck} label="Compliance"/>
         </SidebarGroup>
 
+        <SidebarGroup label="Automatización" collapsed={sidebarCollapsed}>
+          <Nav active={tab==="scheduler"} onClick={()=>{setTab("scheduler");setMobileNav(false)}} icon={CalendarDays} label="Scheduler"/>
+          <Nav active={tab==="loop"} onClick={()=>{setTab("loop");setMobileNav(false)}} icon={TrendingUp} label="Ciclo vivo"/>
+          <Nav active={tab==="dataset"} onClick={()=>{setTab("dataset");setMobileNav(false)}} icon={Database} label="Dataset"/>
+          <Nav active={tab==="production"} onClick={()=>{setTab("production");setMobileNav(false)}} icon={ShieldCheck} label="Producción"/>
+        </SidebarGroup>
+
         <SidebarGroup label="Configuración" collapsed={sidebarCollapsed}>
           <Nav active={tab==="categories"} onClick={()=>{setTab("categories");setMobileNav(false)}} icon={Layers3} label="Categorías"/>
           <Nav active={tab==="images"} onClick={()=>{setTab("images");setMobileNav(false)}} icon={ImageIcon} label="Imágenes"/>
@@ -539,7 +550,7 @@ export default function EfimeroApp(){
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>Bloques 17–20</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>Bloques 21–24</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -621,6 +632,14 @@ export default function EfimeroApp(){
       {tab==="fatigue"&&<FatigueRadar library={library} schedule={schedule}/>}
 
       {tab==="compliance"&&<ComplianceCenter items={schedule} onChange={(items:any[])=>setSchedule(items as ScheduleItem[])}/>}
+
+      {tab==="scheduler"&&<PublishingScheduler/>}
+
+      {tab==="loop"&&<LearningLoop/>}
+
+      {tab==="dataset"&&<EditorialDataset/>}
+
+      {tab==="production"&&<ProductionReadiness/>}
 
       {tab==="operations"&&<OperationsCenter schedule={schedule} library={library}/>}
     </main>

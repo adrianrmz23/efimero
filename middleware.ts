@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const COOKIE_NAME = "efimero_session";
 
 function isPublicPath(pathname:string){
-  return pathname === "/login" || pathname === "/api/auth/session" || pathname.startsWith("/_next/") || pathname === "/favicon.ico";
+  return pathname === "/login" || pathname === "/privacy" || pathname === "/terms" || pathname === "/data-deletion" || pathname === "/api/auth/session" || pathname === "/api/cron/automation" || pathname === "/api/metrics/collect" || pathname.startsWith("/_next/") || pathname === "/favicon.ico";
 }
 
 function allowedEmails(){

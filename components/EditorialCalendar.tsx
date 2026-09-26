@@ -26,7 +26,8 @@ export default function EditorialCalendar({items,onChange,onOpenCreator,onSaveTo
   async function persist(item:Item){
     if(!supabase)return;
     const publishAt=`${item.date}T${item.time}:00`;
-    await supabase.from("efimero_scheduled_posts").upsert({id:item.id,publish_at:publishAt,text:item.text,category:item.category,format:item.format,status:item.status,page_id:item.pageId||pageId||null,page_name:item.pageName||page?.name||null,meta_post_id:item.metaPostId||null,compliance_data:item.compliance||null,image_url:item.imageUrl||null,autopilot:Boolean((item as any).autopilot),publish_error:item.publishError||null},{onConflict:"id"});
+    const publishAtUtc=new Date(`${item.date}T${item.time}:00-06:00`).toISOString();
+    await supabase.from("efimero_scheduled_posts").upsert({id:item.id,publish_at:publishAt,publish_at_utc:publishAtUtc,text:item.text,category:item.category,format:item.format,status:item.status,page_id:item.pageId||pageId||null,page_name:item.pageName||page?.name||null,meta_post_id:item.metaPostId||null,compliance_data:item.compliance||null,image_url:item.imageUrl||null,autopilot:Boolean((item as any).autopilot),publish_error:item.publishError||null},{onConflict:"id"});
   }
   function patch(id:string,changes:Partial<Item>){const next=items.map(x=>x.id===id?{...x,...changes}:x);onChange(next);const changed=next.find(x=>x.id===id);if(changed)void persist(changed)}
   function move(id:string,date:string){patch(id,{date,status:"Borrador"})}
@@ -42,7 +43,7 @@ export default function EditorialCalendar({items,onChange,onOpenCreator,onSaveTo
     const action=now?"publicar ahora":"programar en Facebook";
     if(!window.confirm(`¿Confirmas ${action} en ${page?.name||"la página"}?`))return;
     setBusy(item.id);setError("");setMessage("");
-    try{const r=await fetch("/api/meta/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pageId,message:item.text,imageDataUrl:item.imageDataUrl,imageUrl:item.imageUrl,scheduledAt,publishNow:now})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Meta rechazó la publicación.");patch(item.id,{status:now?"Publicado":"Programado",pageId,pageName:page?.name,metaPostId:d.id||undefined,publishError:undefined});setMessage(now?"Publicación enviada a Facebook.":"Publicación programada en Facebook.");}
+    try{const r=await fetch("/api/meta/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pageId,message:item.text,imageDataUrl:item.imageDataUrl,imageUrl:item.imageUrl,scheduledAt,publishNow:now,scheduledPostId:item.id})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Meta rechazó la publicación.");patch(item.id,{status:now?"Publicado":"Programado",pageId,pageName:page?.name,metaPostId:d.id||undefined,publishError:undefined});setMessage(now?"Publicación enviada a Facebook.":"Publicación programada en Facebook.");}
     catch(e:any){patch(item.id,{status:"Error",publishError:e?.message||"Error"});setError(e?.message||"No fue posible publicar.")}finally{setBusy(null)}
   }
   async function reviewAll(){
@@ -60,7 +61,7 @@ export default function EditorialCalendar({items,onChange,onOpenCreator,onSaveTo
     const batch=items.filter(x=>x.status==="Aprobado");if(!batch.length){setError("No hay piezas aprobadas.");return}if(!pageId){setError("Selecciona una página.");return}if(!window.confirm(`Se intentarán programar ${batch.length} piezas en ${page?.name||"Facebook"}. ¿Continuar?`))return;
     setBusy("batch-schedule");setError("");setMessage("");let next=[...items];let ok=0,failed=0;
     for(const item of batch){
-      try{const scheduledAt=new Date(`${item.date}T${item.time}:00`).toISOString();const r=await fetch("/api/meta/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pageId,message:item.text,imageDataUrl:item.imageDataUrl,imageUrl:item.imageUrl,scheduledAt,publishNow:false})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Meta rechazó la programación.");next=next.map(x=>x.id===item.id?{...x,status:"Programado",pageId,pageName:page?.name,metaPostId:d.id||undefined,publishError:undefined}:x);ok++;}catch(e:any){next=next.map(x=>x.id===item.id?{...x,status:"Error",publishError:e?.message||"Error"}:x);failed++;}
+      try{const scheduledAt=new Date(`${item.date}T${item.time}:00`).toISOString();const r=await fetch("/api/meta/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pageId,message:item.text,imageDataUrl:item.imageDataUrl,imageUrl:item.imageUrl,scheduledAt,publishNow:false,scheduledPostId:item.id})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Meta rechazó la programación.");next=next.map(x=>x.id===item.id?{...x,status:"Programado",pageId,pageName:page?.name,metaPostId:d.id||undefined,publishError:undefined}:x);ok++;}catch(e:any){next=next.map(x=>x.id===item.id?{...x,status:"Error",publishError:e?.message||"Error"}:x);failed++;}
     }
     onChange(next);next.filter(x=>batch.some(c=>c.id===x.id)).forEach(x=>void persist(x));setBusy(null);setMessage(`${ok} programadas${failed?` · ${failed} con error`:""}.`);
   }

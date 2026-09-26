@@ -174,3 +174,16 @@ export async function resolveStoredPageToken(ownerUserId: string, pageId: string
   if (!data?.encrypted_page_token) throw new Error("La página seleccionada necesita sincronizarse de nuevo.");
   return { token: decryptSecret(data.encrypted_page_token), pageName: data.page_name as string };
 }
+
+export async function resolveAnyStoredPageToken(pageId: string) {
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from("efimero_meta_pages")
+    .select("encrypted_page_token,page_name,page_id")
+    .eq("page_id", pageId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.encrypted_page_token) throw new Error("La página seleccionada necesita reconectarse o sincronizarse de nuevo.");
+  return { token: decryptSecret(data.encrypted_page_token), pageName: String(data.page_name || "Página de Facebook") };
+}

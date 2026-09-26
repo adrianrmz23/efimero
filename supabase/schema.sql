@@ -260,3 +260,103 @@ alter table efimero_meta_connections enable row level security;
 alter table efimero_meta_pages enable row level security;
 -- No se crean políticas para authenticated: estas dos tablas contienen secretos cifrados
 -- y sólo se leen/escriben desde rutas de servidor usando SUPABASE_SERVICE_ROLE_KEY.
+
+-- Bloques 21–24: scheduler, aprendizaje post-publicación, dataset vectorial y producción
+alter table efimero_scheduled_posts add column if not exists publish_at_utc timestamptz;
+alter table efimero_scheduled_posts add column if not exists published_at_actual timestamptz;
+alter table efimero_scheduled_posts add column if not exists last_metrics_sync_at timestamptz;
+
+create table if not exists efimero_publish_jobs (
+  id uuid primary key default gen_random_uuid(),
+  scheduled_post_id uuid not null unique references efimero_scheduled_posts(id) on delete cascade,
+  state text not null default 'pending',
+  attempts integer not null default 0,
+  processing_started_at timestamptz,
+  next_retry_at timestamptz,
+  last_error text,
+  meta_post_id text,
+  published_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists efimero_publish_jobs_state_idx on efimero_publish_jobs(state, next_retry_at);
+
+create table if not exists efimero_metric_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  scheduled_post_id uuid not null references efimero_scheduled_posts(id) on delete cascade,
+  page_id text,
+  meta_post_id text not null,
+  checkpoint text not null,
+  reactions bigint not null default 0,
+  comments bigint not null default 0,
+  shares bigint not null default 0,
+  performance_score numeric not null default 0,
+  raw jsonb not null default '{}'::jsonb,
+  collected_at timestamptz not null default now(),
+  unique(scheduled_post_id,checkpoint)
+);
+create index if not exists efimero_metric_snapshots_post_idx on efimero_metric_snapshots(scheduled_post_id,collected_at desc);
+create index if not exists efimero_metric_snapshots_checkpoint_idx on efimero_metric_snapshots(checkpoint,collected_at desc);
+
+create extension if not exists vector with schema extensions;
+create table if not exists efimero_editorial_dataset (
+  id uuid primary key default gen_random_uuid(),
+  content_library_id uuid not null unique references efimero_content_library(id) on delete cascade,
+  text text not null,
+  category text,
+  page_id text,
+  page_name text,
+  hook text,
+  topic_key text,
+  length_bucket text,
+  word_count integer not null default 0,
+  performance_score numeric not null default 0,
+  evergreen_score numeric not null default 0,
+  fatigue_risk numeric not null default 0,
+  embedding extensions.vector(1536),
+  indexed_at timestamptz not null default now()
+);
+create index if not exists efimero_editorial_dataset_category_idx on efimero_editorial_dataset(category, performance_score desc);
+create index if not exists efimero_editorial_dataset_topic_idx on efimero_editorial_dataset(topic_key, performance_score desc);
+create index if not exists efimero_editorial_dataset_embedding_idx on efimero_editorial_dataset using hnsw (embedding extensions.vector_cosine_ops);
+
+create or replace function match_efimero_dataset(
+  query_embedding extensions.vector(1536),
+  match_count integer default 12,
+  filter_category text default null
+)
+returns table(
+  id uuid,
+  text text,
+  category text,
+  hook text,
+  topic_key text,
+  length_bucket text,
+  performance_score numeric,
+  evergreen_score numeric,
+  similarity double precision
+)
+language sql
+stable
+as $$
+  select d.id,d.text,d.category,d.hook,d.topic_key,d.length_bucket,d.performance_score,d.evergreen_score,
+         1 - (d.embedding <=> query_embedding) as similarity
+  from efimero_editorial_dataset d
+  where d.embedding is not null and (filter_category is null or filter_category='' or d.category=filter_category)
+  order by d.embedding <=> query_embedding
+  limit greatest(1,least(match_count,30));
+$$;
+
+
+-- RLS para Bloques 21–24
+do $$
+declare
+  t text;
+  tables text[] := array['efimero_publish_jobs','efimero_metric_snapshots','efimero_editorial_dataset'];
+begin
+  foreach t in array tables loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "efimero_authenticated_full_access" on public.%I', t);
+    execute format('create policy "efimero_authenticated_full_access" on public.%I for all to authenticated using (true) with check (true)', t);
+  end loop;
+end $$;

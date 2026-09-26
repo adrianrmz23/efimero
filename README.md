@@ -146,3 +146,24 @@ Esta entrega mantiene el foco en texto y añade cuatro módulos operativos:
 También se rediseñaron las acciones del conector Meta para eliminar botones nativos del navegador y mantener la misma interfaz de Efímero.
 
 Después de actualizar, ejecuta `supabase/schema.sql` de nuevo para crear `efimero_fatigue_snapshots` y su política RLS.
+
+## Bloques 21–24 · Cierre del ciclo operativo
+
+- **21 · Scheduler:** cola automática de publicación para piezas aprobadas y vencidas, locks por job, reintentos con backoff y registro de errores.
+- **22 · Ciclo vivo:** snapshots de rendimiento a 1 h, 24 h, 72 h y 7 días. Las métricas vuelven a Biblioteca para alimentar Aprendizaje.
+- **23 · Dataset editorial:** embeddings con `text-embedding-3-small`, búsqueda semántica con pgvector y recuperación automática de ejemplos relevantes dentro de la Fábrica.
+- **24 · Producción:** checklist de secretos, Meta OAuth, cron, dataset, snapshots y páginas legales públicas.
+
+### Variables nuevas
+```env
+CRON_SECRET=
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+```
+
+### Páginas legales públicas
+- `/privacy`
+- `/terms`
+- `/data-deletion`
+
+### Configuración de automatización
+Lee `AUTOMATION_SETUP.md` antes de activar tareas periódicas en Vercel.
