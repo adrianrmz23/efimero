@@ -41,7 +41,7 @@ export default function TextQueue({items,onChange,onOpenCalendar}:Props){
     const ids=new Set(items.filter(x=>(x.status==="Borrador"||x.status==="Revisión")&&x.compliance?.status==="pass").map(x=>x.id));
     if(!ids.size){setMessage("No hay textos con Compliance PASS pendientes de aprobación.");return}
     const next=items.map(x=>ids.has(x.id)?{...x,status:"Aprobado"}:x);onChange(next);
-    if(supabase)await Promise.all([...ids].map(id=>supabase.from("efimero_scheduled_posts").update({status:"Aprobado"}).eq("id",id)));
+    const db=supabase;if(db)await Promise.all([...ids].map(id=>db.from("efimero_scheduled_posts").update({status:"Aprobado"}).eq("id",id)));
     setMessage(`${ids.size} textos aprobados.`);
   }
 
