@@ -19,3 +19,8 @@ La plataforma informa y automatiza tareas repetitivas, pero no presenta scores c
 ## V1.1 · Radar de inspiración
 
 El Bloque 29 añade inspiración externa con captura asistida, análisis multimodal, filtros de similitud y Compliance. No depende de scraping masivo de Facebook.
+
+
+## V1.3 · Learning Agent
+
+La plataforma puede sincronizar varias páginas del Radar, abstraer sus patrones editoriales y combinarlos con el RAG propio. Este aprendizaje es actualizable y no modifica los pesos del modelo. Las salidas externas siguen protegidas por similitud, Compliance y revisión humana antes de publicación.

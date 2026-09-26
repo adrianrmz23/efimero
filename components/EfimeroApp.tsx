@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive, Activity, BarChart3, Bookmark, BrainCircuit, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCheck, Copy, Database,
+  Archive, Activity, BarChart3, Bookmark, BrainCircuit, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Copy, Database,
   ExternalLink, FileText, Filter, Fingerprint, Flame, FlaskConical, Gauge, Image as ImageIcon, Layers3, LayoutDashboard, Library, Link2, Menu, MessageCircle, MessagesSquare, Plus, RefreshCw, RadioTower, ShieldCheck,
   Search, Settings2, Smile, Sparkles, Star, Trash2, TrendingUp, Type as TypeIcon, Upload, WandSparkles, X, Zap,
 } from "lucide-react";
@@ -30,11 +30,14 @@ import EditorialScoring from "@/components/EditorialScoring";
 import WeeklyReport from "@/components/WeeklyReport";
 import QualityCenter from "@/components/QualityCenter";
 import InspirationRadar from "@/components/InspirationRadar";
+import LearningAgent from "@/components/LearningAgent";
 import ControlCenter from "@/components/ControlCenter";
+import QuickPostStudio from "@/components/QuickPostStudio";
+import SinglePostScheduler from "@/components/SinglePostScheduler";
 import LogoutButton from "@/components/auth/LogoutButton";
 
-type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality" | "radar" | "control";
-const controlTabs: Tab[] = ["profile","learning","experiments","audience","fatigue","score","weekly","autopilot","agent","scheduler","loop","dataset","meta","compliance","categories","images","production","operations","quality"];
+type Tab = "creator" | "publisher" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality" | "radar" | "learningAgent" | "control";
+const controlTabs: Tab[] = ["profile","learning","learningAgent","experiments","audience","fatigue","score","weekly","autopilot","agent","scheduler","loop","dataset","meta","compliance","categories","images","production","operations","quality"];
 type PostType = "Texto" | "Imagen" | "Híbrido";
 type ScheduleItem = { id:string; date:string; time:string; category:string; text:string; format:"Texto"|"Imagen"; status:"Borrador"|"Revisión"|"Aprobado"|"Programado"|"Publicado"|"Error"; similarity?:number; imageDataUrl?:string; imageUrl?:string; pageId?:string; pageName?:string; metaPostId?:string; compliance?:any; publishError?:string; autopilot?:boolean };
 type Category = { id:string; name:string; emoji:string; enabled:boolean };
@@ -87,7 +90,7 @@ const contentBank: Record<string,string[]> = {
   Humor:["Mi talento es decir ‘hoy sí duermo temprano’ con una seguridad admirable.","Yo sí sé administrar mi tiempo: lo desperdicio de manera muy organizada.","Adulto funcional por fuera, buscando qué cenar desde las 4 de la tarde por dentro.","No necesito vacaciones, necesito que nadie me hable durante tres días.","Mi economía se basa en no abrir la app del banco para que no me dé estrés."],
   Relaciones:["El cariño también se nota en quien hace espacio para ti incluso en sus días pesados.","Qué bonito cuando alguien no te hace adivinar si le importas.","A veces querer a alguien también significa dejar de insistir.","Las personas correctas no solucionan todo, pero hacen que no cargues todo solo.","El amor tranquilo también existe: no todo tiene que doler para sentirse intenso."],
   Nostalgia:["Qué raro volver a escuchar una canción y recordar una versión de ti que ya no existe.","Hay lugares que nunca vuelves a visitar, pero sigues llevando contigo.","Antes queríamos crecer rápido. Ahora daríamos todo por una tarde cualquiera de entonces.","La nostalgia es ese lugar donde todo sigue igual aunque tú ya hayas cambiado.","Hay fotos que no extrañas por la imagen, sino por todo lo que estaba pasando alrededor."],
-  Preguntas:["Dinos tu estado de ánimo usando solo emojis 👀","¿Qué canción te lleva automáticamente a otra época de tu vida?","¿Qué pequeña cosa te mejora el día casi siempre?","¿Qué aprendiste demasiado tarde, pero te cambió para bien?","Si pudieras repetir un solo día de tu vida, ¿cuál sería?"],
+  Preguntas:["¿Qué emoji describe mejor tu estado de ánimo hoy? 👀","¿Qué canción te lleva automáticamente a otra época de tu vida?","¿Qué pequeña cosa te mejora el día casi siempre?","¿Qué aprendiste demasiado tarde, pero te cambió para bien?","Si pudieras repetir un solo día de tu vida, ¿cuál sería?"],
   "Pensamientos nocturnos":["Las noches tienen esa costumbre de devolver preguntas que durante el día logramos ignorar.","Tal vez descansar también sea una forma de seguir avanzando.","No todo lo que no resolviste hoy tiene que acompañarte a la cama.","Que esta noche pese menos que todo lo que cargaste durante el día.","Mañana también cuenta. No todo tiene que resolverse hoy."],
   "Motivación ligera":["No tienes que tener todo claro para dar el siguiente paso.","Empezar despacio sigue siendo empezar.","A veces avanzar se parece más a descansar que a correr.","Un mal día no tiene por qué convertirse en una mala semana.","Hazlo a tu ritmo, pero no te abandones en el camino."],
   "Vida cotidiana":["La verdadera paz adulta es cancelar un plan y que la otra persona también quería cancelarlo.","Hay días en los que un café y cinco minutos de silencio arreglan más de lo esperado.","Qué lujo cuando no tienes nada pendiente y puedes perder el tiempo sin culpa.","La vida adulta consiste en preguntarse qué comer todos los días para siempre.","¿En qué momento comprar cosas para la casa empezó a emocionarnos tanto?"],
@@ -98,6 +101,7 @@ const timeToMinutes=(time:string)=>{const [h,m]=time.split(":").map(Number);retu
 const minutesToTime=(m:number)=>`${pad(Math.floor(m/60))}:${pad(m%60)}`;
 const toISODate=(date:Date)=>`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
 const addDays=(iso:string,amount:number)=>{const d=new Date(`${iso}T12:00:00`);d.setDate(d.getDate()+amount);return toISODate(d)};
+const futureSlotsForDate=(date:string,slots:number[],now=new Date(),bufferMinutes=10)=>{const today=toISODate(now);if(date<today)return[];if(date>today)return slots;const min=now.getHours()*60+now.getMinutes()+bufferMinutes;return slots.filter(x=>x>=min)};
 const prettyDate=(iso:string)=>new Intl.DateTimeFormat("es-MX",{weekday:"long",day:"numeric",month:"long"}).format(new Date(`${iso}T12:00:00`));
 const normalize=(text:string)=>text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s]/g," ").replace(/\s+/g," ").trim();
 const similarity=(a:string,b:string)=>{const A=new Set(normalize(a).split(" ").filter(Boolean));const B=new Set(normalize(b).split(" ").filter(Boolean));if(!A.size||!B.size)return 0;const intersection=[...A].filter(w=>B.has(w)).length;return intersection/new Set([...A,...B]).size};
@@ -196,9 +200,10 @@ function extractReferencePattern(text:string){
 
 export default function EfimeroApp(){
   const [tab,setTab]=useState<Tab>("creator");
+  const [publisherPrefill,setPublisherPrefill]=useState<{text:string;category:string;nonce:number}|null>(null);
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
-    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality","radar","control"];
+    const allowed:Tab[]=["creator","publisher","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality","radar","learningAgent","control"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
   const [mobileNav,setMobileNav]=useState(false);
@@ -282,8 +287,11 @@ export default function EfimeroApp(){
   const effectiveFrequency=frequency===0?Math.max(5,customFrequency):frequency;
   const effectiveDays=days===0?Math.max(7,customDays):days;
   const dailySlots=useMemo(()=>buildSlots(startTime,endTime,effectiveFrequency,skipRanges),[startTime,endTime,effectiveFrequency,skipRanges]);
-  const totalPosts=dailySlots.length*effectiveDays;
-  const calendarDates=useMemo(()=>Array.from({length:effectiveDays},(_,i)=>addDays(startDate,i)),[effectiveDays,startDate]);
+  const today=toISODate(new Date());
+  const safeStartDate=startDate<today?today:startDate;
+  const calendarDates=useMemo(()=>Array.from({length:effectiveDays},(_,i)=>addDays(safeStartDate,i)),[effectiveDays,safeStartDate]);
+  const plannedSlots=calendarDates.map(date=>futureSlotsForDate(date,dailySlots,new Date(),10));
+  const totalPosts=plannedSlots.reduce((sum,slots)=>sum+slots.length,0);
   const visibleDate=calendarDates[Math.min(calendarDay,calendarDates.length-1)]||startDate;
   const visiblePosts=schedule.filter(p=>p.date===visibleDate);
   const duplicates=useMemo(()=>schedule.filter(p=>(p.similarity||0)>=.84).length,[schedule]);
@@ -318,59 +326,51 @@ export default function EfimeroApp(){
   async function generateSchedule(){
     const bankCategories=selectedCategories.length?selectedCategories:categories.filter(c=>c.enabled).map(c=>c.name);
     if(!bankCategories.length||!dailySlots.length)return;
+    const now=new Date();const todayNow=toISODate(now);const effectiveStart=startDate<todayNow?todayNow:startDate;
+    const dates=Array.from({length:effectiveDays},(_,i)=>addDays(effectiveStart,i));
+    const slotsByDate=dates.map(date=>futureSlotsForDate(date,dailySlots,now,10));
+    const plannedTotal=slotsByDate.reduce((sum,slots)=>sum+slots.length,0);
+    if(!plannedTotal){window.alert("No quedan horarios futuros dentro del rango seleccionado. Cambia la hora final o empieza mañana.");return}
     setGenerating(true);
     try{
+      if(effectiveStart!==startDate)setStartDate(effectiveStart);
       const aiBanks:Record<string,string[]>={};
-      if(useAI){for(const c of bankCategories){aiBanks[c]=await getAIBank(c,Math.min(30,Math.ceil(totalPosts/bankCategories.length)))}}
-      const generated:ScheduleItem[]=[];
-      const used=library.map(x=>x.text);
-      const categoryPool=useEditorialProfile?weightedCategoryPool(bankCategories,editorialProfile):bankCategories;
+      if(useAI){for(const c of bankCategories){aiBanks[c]=await getAIBank(c,Math.min(30,Math.ceil(plannedTotal/bankCategories.length)))}}
+      const generated:ScheduleItem[]=[];const used=library.map(x=>x.text);const categoryPool=useEditorialProfile?weightedCategoryPool(bankCategories,editorialProfile):bankCategories;let globalIndex=0;
       for(let dayIndex=0;dayIndex<effectiveDays;dayIndex++){
-        const date=addDays(startDate,dayIndex);
-        dailySlots.forEach((minute,slotIndex)=>{
-          const category=categoryPool[(dayIndex*Math.max(1,dailySlots.length)+slotIndex)%categoryPool.length];
+        const date=dates[dayIndex];
+        slotsByDate[dayIndex].forEach((minute,slotIndex)=>{
+          const category=categoryPool[globalIndex%categoryPool.length];globalIndex++;
           const bank=(aiBanks[category]?.length?aiBanks[category]:contentBank[category])||contentBank["Frases identificables"];
-          const baseIndex=(dayIndex*3+slotIndex)%bank.length;
-          let text=bank[baseIndex]; let attempt=0;
+          const baseIndex=(dayIndex*3+slotIndex)%bank.length;let text=bank[baseIndex];let attempt=0;
           while(used.some(old=>similarity(old,text)>=.86)&&attempt<bank.length-1){attempt++;text=bank[(baseIndex+attempt)%bank.length]}
           let maxSim=used.reduce((m,old)=>Math.max(m,similarity(old,text)),0);
-          if(maxSim>=.9) text=`${text} ${["¿Te pasa?","👀","Hoy hacía falta recordarlo.","Y sí, también cuenta.","¿Quién más?"][(dayIndex+slotIndex)%5]}`;
-          maxSim=used.reduce((m,old)=>Math.max(m,similarity(old,text)),0);
-          used.push(text);
+          if(maxSim>=.9)text=`${text} ${["Ese momento existe.","👀","Hoy hacía falta recordarlo.","Y sí, también cuenta.","A veces pasa."][(dayIndex+slotIndex)%5]}`;
+          maxSim=used.reduce((m,old)=>Math.max(m,similarity(old,text)),0);used.push(text);
           const format:"Texto"|"Imagen"=postType==="Imagen"?"Imagen":postType==="Híbrido"&&(slotIndex+dayIndex)%4===1?"Imagen":"Texto";
           generated.push({id:crypto.randomUUID(),date,time:minutesToTime(minute),category,text,format,status:"Borrador",similarity:maxSim});
         });
       }
-      const reviewedGenerated=await reviewScheduleCompliance(generated);
-      setSchedule(reviewedGenerated);setCalendarDay(0);
-      const snapshot={id:crypto.randomUUID(),createdAt:new Date().toISOString(),days:effectiveDays,posts:reviewedGenerated.length,startDate};
-      setHistory(c=>[snapshot,...c].slice(0,12));
+      const reviewedGenerated=await reviewScheduleCompliance(generated);setSchedule(reviewedGenerated);setCalendarDay(0);
+      const snapshot={id:crypto.randomUUID(),createdAt:new Date().toISOString(),days:effectiveDays,posts:reviewedGenerated.length,startDate:effectiveStart};setHistory(c=>[snapshot,...c].slice(0,12));
       if(autoArchiveGenerated){
-        const existing=library.map(x=>x.text);
-        const generatedLibrary:LibraryItem[]=reviewedGenerated.filter(p=>!existing.some(x=>similarity(x,p.text)>.96)).map(p=>({id:crypto.randomUUID(),text:p.text,category:p.category,format:p.format,createdAt:new Date().toISOString(),source:"generated",generationBatch:snapshot.id}));
+        const existing=library.map(x=>x.text);const generatedLibrary:LibraryItem[]=reviewedGenerated.filter(p=>!existing.some(x=>similarity(x,p.text)>.96)).map(p=>({id:crypto.randomUUID(),text:p.text,category:p.category,format:p.format,createdAt:new Date().toISOString(),source:"generated",generationBatch:snapshot.id}));
         if(generatedLibrary.length)setLibrary(c=>[...generatedLibrary,...c]);
-        if(supabase&&generatedLibrary.length){
-          const rows=generatedLibrary.map(x=>({text:x.text,category:x.category,format:x.format,status:"generated",source:"generated",fingerprint:fingerprint(x.text),generation_batch:snapshot.id,performance_score:0,favorite:false}));
-          for(let i=0;i<rows.length;i+=300) await supabase.from("efimero_content_library").insert(rows.slice(i,i+300));
-        }
+        if(supabase&&generatedLibrary.length){const rows=generatedLibrary.map(x=>({text:x.text,category:x.category,format:x.format,status:"generated",source:"generated",fingerprint:fingerprint(x.text),generation_batch:snapshot.id,performance_score:0,favorite:false}));for(let i=0;i<rows.length;i+=300)await supabase.from("efimero_content_library").insert(rows.slice(i,i+300));}
       }
       if(supabase){
-        const {data:cal,error}=await supabase.from("efimero_calendars").insert({name:`Efímero ${startDate}`,start_date:startDate,days:effectiveDays,settings:{posts:reviewedGenerated.length,frequency:effectiveFrequency,postType,skipRanges,useAI,useEditorialProfile,profileSample:editorialProfile?.sampleSize||0}}).select("id").single();
-        if(!error&&cal){
-          const rows=reviewedGenerated.map(p=>({id:p.id,calendar_id:cal.id,publish_at:`${p.date}T${p.time}:00`,publish_at_utc:new Date(`${p.date}T${p.time}:00-06:00`).toISOString(),text:p.text,category:p.category,format:p.format,status:"draft",fingerprint:fingerprint(p.text),similarity_score:p.similarity||0}));
-          for(let i=0;i<rows.length;i+=300) await supabase.from("efimero_scheduled_posts").insert(rows.slice(i,i+300));
-          setSyncState("synced");
-        }
+        const {data:cal,error}=await supabase.from("efimero_calendars").insert({name:`Efímero ${effectiveStart}`,start_date:effectiveStart,days:effectiveDays,settings:{posts:reviewedGenerated.length,frequency:effectiveFrequency,postType,skipRanges,useAI,useEditorialProfile,profileSample:editorialProfile?.sampleSize||0}}).select("id").single();
+        if(!error&&cal){const rows=reviewedGenerated.map(p=>({id:p.id,calendar_id:cal.id,publish_at:`${p.date}T${p.time}:00`,publish_at_utc:new Date(`${p.date}T${p.time}:00`).toISOString(),text:p.text,category:p.category,format:p.format,status:"draft",fingerprint:fingerprint(p.text),similarity_score:p.similarity||0}));for(let i=0;i<rows.length;i+=300)await supabase.from("efimero_scheduled_posts").insert(rows.slice(i,i+300));setSyncState("synced");}
       }
       setTab("calendar");
     }finally{setGenerating(false)}
   }
 
-  async function saveToLibrary(item:ScheduleItem){
+  async function saveToLibrary(item:ScheduleItem,favorite=false){
     if(library.some(e=>similarity(e.text,item.text)>.94))return;
-    const localItem:LibraryItem={id:crypto.randomUUID(),text:item.text,category:item.category,format:item.format,createdAt:new Date().toISOString(),source:"generated",favorite:true};
+    const localItem:LibraryItem={id:crypto.randomUUID(),text:item.text,category:item.category,format:item.format,createdAt:new Date().toISOString(),source:"generated",favorite};
     setLibrary(c=>[localItem,...c]);
-    if(supabase){const {data}=await supabase.from("efimero_content_library").insert({text:item.text,category:item.category,format:item.format,status:"saved",source:"generated",fingerprint:fingerprint(item.text),performance_score:0,favorite:true}).select("id,created_at").single();if(data)setLibrary(c=>c.map(x=>x.id===localItem.id?{...x,id:data.id,createdAt:data.created_at}:x))}
+    if(supabase){const {data}=await supabase.from("efimero_content_library").insert({text:item.text,category:item.category,format:item.format,status:"saved",source:"generated",fingerprint:fingerprint(item.text),performance_score:0,favorite}).select("id,created_at").single();if(data)setLibrary(c=>c.map(x=>x.id===localItem.id?{...x,id:data.id,createdAt:data.created_at}:x))}
   }
 
 
@@ -518,6 +518,7 @@ export default function EfimeroApp(){
       <div className="sidebarScroll">
         <SidebarGroup label="Principal" collapsed={sidebarCollapsed}>
           <Nav active={tab==="creator"} onClick={()=>{setTab("creator");setMobileNav(false)}} icon={WandSparkles} label="Crear"/>
+          <Nav active={tab==="publisher"} onClick={()=>{setTab("publisher");setMobileNav(false)}} icon={CalendarDays} label="Programar post"/>
           <Nav active={tab==="factory"} onClick={()=>{setTab("factory");setMobileNav(false)}} icon={Zap} label="Fábrica"/>
           <Nav active={tab==="radar"} onClick={()=>{setTab("radar");setMobileNav(false)}} icon={Search} label="Radar inspiración"/>
           <Nav active={tab==="calendar"} onClick={()=>{setTab("calendar");setMobileNav(false)}} icon={CalendarDays} label="Calendario"/>
@@ -525,7 +526,8 @@ export default function EfimeroApp(){
         </SidebarGroup>
 
         <SidebarGroup label="Consultar" collapsed={sidebarCollapsed}>
-          <Nav active={tab==="library"} onClick={()=>{setTab("library");setMobileNav(false)}} icon={Library} label="Biblioteca"/>
+          <Nav active={tab==="library"&&libraryFilter!=="favorites"} onClick={()=>{setLibraryFilter("all");setTab("library");setMobileNav(false)}} icon={Library} label="Biblioteca"/>
+          <Nav active={tab==="library"&&libraryFilter==="favorites"} onClick={()=>{setLibraryFilter("favorites");setTab("library");setMobileNav(false)}} icon={Star} label="Favoritos"/>
           <Nav active={tab==="analytics"} onClick={()=>{setTab("analytics");setMobileNav(false)}} icon={BarChart3} label="Analytics"/>
           <Nav active={tab==="executive"} onClick={()=>{setTab("executive");setMobileNav(false)}} icon={LayoutDashboard} label="Resumen"/>
         </SidebarGroup>
@@ -538,7 +540,7 @@ export default function EfimeroApp(){
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>V1.2 · Radar API</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>V1.4 · Creator Studio</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -550,9 +552,10 @@ export default function EfimeroApp(){
       <div className={`mobileSyncDot ${syncState}`} title={syncLabel}><span className="liveDot"/></div>
     </header>
 
-    <main className="content contentWithSidebar">
+    <main className={`content contentWithSidebar ${tab==="calendar"?"calendarWide":""}`}>
       {tab==="creator"&&<>
-        <div className="pageIntro compactIntro"><div><span className="overline">AUTOPILOT EDITORIAL</span><h1>Genera y programa textos</h1><p>El flujo principal de Efímero ahora es textual: genera, revisa, aprende y programa copies. Las imágenes siguen disponibles como herramienta secundaria.</p></div><div className="introMetric"><span>Audiencia</span><strong>3.5M</strong><small>seguidores</small></div></div>
+        <QuickPostStudio categories={categories} library={library} editorialProfile={useEditorialProfile?editorialProfile:null} onSaveItems={saveFactoryItems} onSchedule={({text,category})=>{setPublisherPrefill({text,category,nonce:Date.now()});setTab("publisher")}}/>
+        <details className="massBuilder"><summary><span><WandSparkles size={18}/><b>Generación masiva de calendario</b><small>Opcional · crea muchos borradores para varios días</small></span><ChevronRight size={18}/></summary>
         <section className="builderCard">
           <SectionHeader step="01" title="Tipo de publicaciones" note="Elige qué tipo de piezas entran en el calendario."/>
           <div className="optionGrid three"><OptionCard active={postType==="Texto"} onClick={()=>setPostType("Texto")} icon={<FileText/>} title="Solo texto" subtitle="Flujo recomendado · foco principal"/><OptionCard active={postType==="Imagen"} onClick={()=>setPostType("Imagen")} icon={<ImageIcon/>} title="Solo imagen" subtitle="Herramienta secundaria"/><OptionCard active={postType==="Híbrido"} onClick={()=>setPostType("Híbrido")} icon={<Sparkles/>} title="Híbrido" subtitle="Texto primero, imagen cuando aplique"/></div>
@@ -573,11 +576,15 @@ export default function EfimeroApp(){
           <Divider/><SectionHeader step="05" title="Programar a largo plazo" note="Genera contenido para múltiples días consecutivos desde la fecha seleccionada."/>
           <div className="dayButtons">{[7,10,15,20,30].map(amount=><button key={amount} onClick={()=>setDays(amount)} className={days===amount?"dayButton active":"dayButton"}>{amount} días</button>)}<button onClick={()=>setDays(0)} className={days===0?"dayButton active":"dayButton"}>Otro</button></div>
           {days===0&&<div className="customDays"><input type="number" min={7} max={90} value={customDays} onChange={e=>setCustomDays(Number(e.target.value))}/><span>días personalizados</span></div>}
-          <div className="longTermGrid"><Field label="Fecha de inicio"><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}/></Field><div className="dateRange"><span>Rango generado</span><strong>{startDate} → {addDays(startDate,effectiveDays-1)}</strong></div><div className="postsPerDay"><span>Publicaciones/día</span><strong>{dailySlots.length}</strong></div></div>
+          <div className="longTermGrid"><Field label="Fecha de inicio"><input type="date" min={today} value={safeStartDate} onChange={e=>setStartDate(e.target.value)}/></Field><div className="dateRange"><span>Rango generado</span><strong>{safeStartDate} → {addDays(safeStartDate,effectiveDays-1)}</strong></div><div className="postsPerDay"><span>Slots base/día</span><strong>{dailySlots.length}</strong></div></div>
           <div className="generationSummary"><div><span className="greenDot"/><span>Total en {effectiveDays} días</span><strong>{totalPosts.toLocaleString("es-MX")}</strong></div><div><span>Cadencia</span><strong>{effectiveFrequency} min</strong></div><div><span>Categorías</span><strong>{selectedCategories.length}</strong></div></div>
-          <button className="generateButton" onClick={generateSchedule} disabled={generating}><WandSparkles size={20}/><span>{generating?"Generando…":"Generar calendario"}</span><small>{totalPosts} publicaciones</small></button><p className="safetyText"><span className="liveDot"/> Se crean borradores. Antes de aprobarse pasan por Compliance Meta; publicar requiere una acción explícita en Calendario.</p>
+          <div className="futureOnlyNote"><Clock3 size={16}/> <span>Si empiezas hoy, Efímero omite automáticamente cualquier horario anterior a la hora actual + 10 minutos.</span></div>
+          <button className="generateButton" onClick={generateSchedule} disabled={generating}><WandSparkles size={20}/><span>{generating?"Generando…":"Generar calendario"}</span><small>{totalPosts} publicaciones futuras</small></button><p className="safetyText"><span className="liveDot"/> Se crean borradores. Antes de aprobarse pasan por Compliance Meta; publicar requiere una acción explícita en Calendario.</p>
         </section>
+        </details>
       </>}
+
+      {tab==="publisher"&&<SinglePostScheduler categories={categories} prefill={publisherPrefill} onAdd={(item:any)=>setSchedule(current=>{const without=current.filter(x=>x.id!==item.id);return [item,...without] as ScheduleItem[]})} onSaveFavorite={(item:any)=>saveFactoryItems([item])}/>}
 
       {tab==="calendar"&&<EditorialCalendar items={schedule} onChange={(items:any[])=>setSchedule(items as ScheduleItem[])} onOpenCreator={()=>setTab("creator")} onSaveToLibrary={saveToLibrary}/>}
 
@@ -637,7 +644,9 @@ export default function EfimeroApp(){
 
       {tab==="quality"&&<QualityCenter/>}
 
-      {tab==="radar"&&<InspirationRadar library={library} onSaveItems={saveFactoryItems}/>}
+      {tab==="radar"&&<InspirationRadar library={library} onSaveItems={saveFactoryItems} onOpenLearningAgent={()=>setTab("learningAgent")}/>}
+
+      {tab==="learningAgent"&&<LearningAgent onSaveItems={saveFactoryItems} onQueue={(items:any[])=>{setSchedule(current=>[...current,...items] as ScheduleItem[]);setTab("queue")}} onOpenRadar={()=>setTab("radar")}/>}
 
       {tab==="control"&&<ControlCenter onNavigate={(next)=>setTab(next as Tab)}/>}
 

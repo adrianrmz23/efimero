@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, BookmarkPlus, Check, ExternalLink, Eye, FileText, Image as ImageIcon, Loader2, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Upload, RadioTower } from "lucide-react";
+import { AlertTriangle, BookmarkPlus, BrainCircuit, Check, ExternalLink, Eye, FileText, Image as ImageIcon, Loader2, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Upload, RadioTower } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type LibrarySource="manual"|"historical"|"generated"|"reference";
@@ -10,13 +10,13 @@ type Watch={id:string;name:string;page_url:string;notes?:string;enabled:boolean;
 type ExternalPost={id:string;watchlist_id:string;provider_post_id:string;post_url?:string;text:string;posted_at?:string;reactions:number;comments:number;shares:number;captured_at:string};
 type Analysis={text:string;category:string;tone:string;hook:string;structure:string;theme:string;mechanism:string;summary:string;confidence:number};
 type Generated={text:string;category:string;patternKept:string;changed:string;novelty:number;maxSimilarity:number;sourceSimilarity:number;datasetSimilarity:number;compliance:any;nearest?:any[];selected:boolean};
-type Props={library:LibraryItem[];onSaveItems:(items:LibraryItem[])=>Promise<void>|void};
+type Props={library:LibraryItem[];onSaveItems:(items:LibraryItem[])=>Promise<void>|void;onOpenLearningAgent?:()=>void};
 
 function normalize(text:string){return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9\s]/g," ").replace(/\s+/g," ").trim()}
 function similarity(a:string,b:string){const A=new Set(normalize(a).split(" ").filter(Boolean)),B=new Set(normalize(b).split(" ").filter(Boolean));if(!A.size||!B.size)return 0;const i=[...A].filter(x=>B.has(x)).length;return i/new Set([...A,...B]).size}
 function compactNumber(value:number){return new Intl.NumberFormat("es-MX",{notation:"compact",maximumFractionDigits:1}).format(value||0)}
 
-export default function InspirationRadar({library,onSaveItems}:Props){
+export default function InspirationRadar({library,onSaveItems,onOpenLearningAgent}:Props){
   const [watchlist,setWatchlist]=useState<Watch[]>([]);const [watchName,setWatchName]=useState("");const [watchUrl,setWatchUrl]=useState("");const [watchNotes,setWatchNotes]=useState("");
   const [sourceId,setSourceId]=useState("");const [sourceUrl,setSourceUrl]=useState("");const [text,setText]=useState("");const [imageDataUrl,setImageDataUrl]=useState("");const [imageName,setImageName]=useState("");const [analysis,setAnalysis]=useState<Analysis|null>(null);const [analyzing,setAnalyzing]=useState(false);const [message,setMessage]=useState("");
   const [mode,setMode]=useState("pattern-new-theme");const [count,setCount]=useState(6);const [generating,setGenerating]=useState(false);const [generated,setGenerated]=useState<Generated[]>([]);const [saving,setSaving]=useState(false);
@@ -71,7 +71,7 @@ export default function InspirationRadar({library,onSaveItems}:Props){
   const passCount=generated.filter(x=>x.compliance?.status==="pass"&&x.novelty>=40).length;
 
   return <>
-    <div className="pageIntro"><div><span className="overline">RADAR DE INSPIRACIÓN · BRIGHT DATA</span><h1>Vigila páginas públicas y transforma patrones en ideas nuevas</h1><p>Sincroniza posts públicos por URL, compara sus señales visibles y usa la IA para abstraer estructuras sin convertirlas en copias.</p></div><div className="inspirationHeroBadge"><RadioTower size={17}/><div><strong>Monitor externo</strong><span>Bright Data + IA + Compliance</span></div></div></div>
+    <div className="pageIntro"><div><span className="overline">RADAR DE INSPIRACIÓN · BRIGHT DATA</span><h1>Vigila páginas públicas y transforma patrones en ideas nuevas</h1><p>Sincroniza posts públicos por URL, compara sus señales visibles y usa la IA para abstraer estructuras sin convertirlas en copias.</p></div><div className="inspirationHeroActions"><div className="inspirationHeroBadge"><RadioTower size={17}/><div><strong>Monitor externo</strong><span>Bright Data + IA + Compliance</span></div></div>{onOpenLearningAgent&&<button className="uiBtn uiBtnPrimary" onClick={onOpenLearningAgent}><BrainCircuit size={16}/> Entrenar Learning Agent</button>}</div></div>
     <div className="inspirationMetrics"><Metric label="Páginas vigiladas" value={watchlist.length}/><Metric label="Posts sincronizados" value={externalPosts.length}/><Metric label="Variaciones listas" value={passCount}/></div>
 
     <div className="inspirationGrid">

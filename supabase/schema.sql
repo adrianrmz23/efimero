@@ -499,3 +499,146 @@ create index if not exists efimero_inspiration_posts_watch_idx on efimero_inspir
 alter table efimero_inspiration_posts enable row level security;
 drop policy if exists "efimero_authenticated_full_access" on efimero_inspiration_posts;
 create policy "efimero_authenticated_full_access" on efimero_inspiration_posts for all to authenticated using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid());
+
+-- Bloque 30: Learning Agent · aprendizaje continuo con RAG + patrones externos
+create table if not exists efimero_learning_documents (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  inspiration_post_id uuid not null unique references efimero_inspiration_posts(id) on delete cascade,
+  watchlist_id uuid not null references efimero_inspiration_watchlist(id) on delete cascade,
+  page_name text not null,
+  source_text text not null,
+  category text,
+  tone text,
+  hook_type text,
+  structure text,
+  theme text,
+  mechanism text,
+  length_bucket text,
+  keywords jsonb not null default '[]'::jsonb,
+  engagement_score numeric not null default 0,
+  embedding extensions.vector(1536),
+  analysis jsonb not null default '{}'::jsonb,
+  analyzed_at timestamptz not null default now()
+);
+create index if not exists efimero_learning_documents_owner_idx on efimero_learning_documents(owner_user_id,analyzed_at desc);
+create index if not exists efimero_learning_documents_watch_idx on efimero_learning_documents(watchlist_id,engagement_score desc);
+create index if not exists efimero_learning_documents_embedding_idx on efimero_learning_documents using hnsw (embedding extensions.vector_cosine_ops);
+
+create table if not exists efimero_learning_patterns (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  pattern_key text not null,
+  title text not null,
+  category text,
+  tone text,
+  hook_type text,
+  structure text,
+  theme text,
+  mechanism text,
+  description text,
+  sample_size integer not null default 0,
+  avg_engagement_score numeric not null default 0,
+  source_pages jsonb not null default '[]'::jsonb,
+  source_post_ids jsonb not null default '[]'::jsonb,
+  embedding extensions.vector(1536),
+  updated_at timestamptz not null default now(),
+  unique(owner_user_id,pattern_key)
+);
+create index if not exists efimero_learning_patterns_owner_idx on efimero_learning_patterns(owner_user_id,sample_size desc,avg_engagement_score desc);
+create index if not exists efimero_learning_patterns_embedding_idx on efimero_learning_patterns using hnsw (embedding extensions.vector_cosine_ops);
+
+create table if not exists efimero_learning_runs (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  source_posts integer not null default 0,
+  analyzed_posts integer not null default 0,
+  patterns_found integer not null default 0,
+  stats jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists efimero_learning_runs_owner_idx on efimero_learning_runs(owner_user_id,created_at desc);
+
+create table if not exists efimero_learning_generations (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  objective text not null,
+  category text,
+  exploration integer not null default 55,
+  pattern_ids jsonb not null default '[]'::jsonb,
+  result jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists efimero_learning_generations_owner_idx on efimero_learning_generations(owner_user_id,created_at desc);
+
+create or replace function match_efimero_learning_patterns(
+  query_embedding extensions.vector(1536),
+  owner_filter uuid,
+  match_count integer default 10,
+  filter_category text default null
+)
+returns table(
+  id uuid,
+  title text,
+  category text,
+  tone text,
+  hook_type text,
+  structure text,
+  theme text,
+  mechanism text,
+  description text,
+  sample_size integer,
+  avg_engagement_score numeric,
+  source_pages jsonb,
+  similarity double precision
+)
+language sql
+stable
+as $$
+  select p.id,p.title,p.category,p.tone,p.hook_type,p.structure,p.theme,p.mechanism,p.description,
+         p.sample_size,p.avg_engagement_score,p.source_pages,
+         1 - (p.embedding <=> query_embedding) as similarity
+  from efimero_learning_patterns p
+  where p.owner_user_id = owner_filter
+    and p.embedding is not null
+    and (filter_category is null or filter_category='' or p.category=filter_category)
+  order by p.embedding <=> query_embedding
+  limit greatest(1,least(match_count,30));
+$$;
+
+create or replace function match_efimero_learning_documents(
+  query_embedding extensions.vector(1536),
+  owner_filter uuid,
+  match_count integer default 3
+)
+returns table(
+  id uuid,
+  source_text text,
+  page_name text,
+  category text,
+  mechanism text,
+  engagement_score numeric,
+  similarity double precision
+)
+language sql
+stable
+as $$
+  select d.id,d.source_text,d.page_name,d.category,d.mechanism,d.engagement_score,
+         1 - (d.embedding <=> query_embedding) as similarity
+  from efimero_learning_documents d
+  where d.owner_user_id = owner_filter and d.embedding is not null
+  order by d.embedding <=> query_embedding
+  limit greatest(1,least(match_count,10));
+$$;
+
+do $$
+declare
+  t text;
+  tables text[] := array['efimero_learning_documents','efimero_learning_patterns','efimero_learning_runs','efimero_learning_generations'];
+begin
+  foreach t in array tables loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "efimero_authenticated_full_access" on public.%I', t);
+    execute format('create policy "efimero_authenticated_full_access" on public.%I for all to authenticated using (owner_user_id = auth.uid()) with check (owner_user_id = auth.uid())', t);
+  end loop;
+end $$;

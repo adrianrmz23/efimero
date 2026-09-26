@@ -9,7 +9,7 @@ export default function ProductionReadiness(){
   async function load(){setBusy(true);setError("");try{const r=await fetch("/api/production/status",{cache:"no-store"});const d=await r.json();if(!r.ok)throw new Error(d.error||"No se pudo comprobar producción.");setStatus(d)}catch(e:any){setError(e?.message||"Error") }finally{setBusy(false)}}
   useEffect(()=>{void load()},[]);
   const s=status.services||{};const checks=[
-    ["Supabase service role",s.serviceRole],["OAuth de Meta",s.metaOauth],["Facebook conectado",s.metaConnected],["Token Meta saludable",s.metaStatus==="connected"],["OpenAI",s.openai],["Bright Data Radar",s.brightData],["CRON_SECRET",s.cronSecret],["Sin token manual antiguo",!s.legacyMetaUserToken],
+    ["Supabase service role",s.serviceRole],["OAuth de Meta",s.metaOauth],["Facebook conectado",s.metaConnected],["Token Meta saludable",s.metaStatus==="connected"],["OpenAI",s.openai],["CheapestInference",s.cheapestInference],["Bright Data Radar",s.brightData],["CRON_SECRET",s.cronSecret],["Sin token manual antiguo",!s.legacyMetaUserToken],
   ] as [string,boolean][];
   const ready=checks.filter(x=>x[1]).length;
   return <>

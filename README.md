@@ -1,4 +1,59 @@
-# Efímero Content Engine — V1.1 · Bloques 1–29
+# Efímero Content Engine — V1.3 · Learning Agent
+
+## Bloque 30 — Learning Agent
+
+El Learning Agent convierte el Radar externo en aprendizaje editorial continuo. No hace fine-tuning del modelo: usa **Bright Data + análisis estructurado + embeddings + clustering + RAG** para aprender patrones actualizables sin memorizar ni copiar publicaciones externas.
+
+### Flujo
+
+```text
+Watchlist de páginas
+      ↓
+Bright Data
+      ↓
+Posts públicos
+      ↓
+Analyzer IA
+      ↓
+Embeddings
+      ↓
+Clusters / patrones
+      ↓
+RAG externo + memoria propia
+      ↓
+Copys nuevos
+      ↓
+Anti-copia + Compliance
+      ↓
+Biblioteca / Bandeja
+```
+
+### Funciones
+
+- **Recolectar + aprender:** sincroniza varias páginas vigiladas y después analiza los posts nuevos.
+- **Solo aprender:** reanaliza lo ya guardado sin gastar una nueva extracción de Bright Data.
+- Normaliza engagement dentro de cada página como señal relativa; no lo presenta como alcance ni predicción de viralidad.
+- Descubre patrones por categoría, tono, hook, estructura, tema y mecanismo editorial.
+- Genera con una jerarquía conceptual de **voz propia > patrones externos > exploración**.
+- Compara cada copy contra documentos externos y el Dataset propio para bloquear similitudes excesivas.
+- Las propuestas vuelven a pasar por el Compliance completo antes de poder enviarse a Bandeja.
+
+### Supabase
+
+Ejecuta nuevamente `supabase/schema.sql`. Se agregan:
+
+- `efimero_learning_documents`
+- `efimero_learning_patterns`
+- `efimero_learning_runs`
+- `efimero_learning_generations`
+- `match_efimero_learning_patterns()`
+- `match_efimero_learning_documents()`
+
+No se requieren variables nuevas. Utiliza las ya configuradas para Bright Data, OpenAI, embeddings y Supabase service role.
+
+Lee `LEARNING_AGENT_SETUP.md` para la prueba recomendada.
+
+---
 
 
 ## Bloque 29 — Radar de inspiración
@@ -243,3 +298,21 @@ Lee `AUTOMATION_SETUP.md` antes de activar tareas periódicas en Vercel.
 - Sidebar reducido a Principal, Consultar y Sistema.
 - Centro de control agrupa inteligencia avanzada, automatización, Meta y administración.
 - Ver `BRIGHTDATA_SETUP.md`.
+## V1.4 · Creator Studio + programador individual
+
+- **Crear** ahora abre un generador rápido de una publicación a la vez. Por defecto usa `gpt-5.6-terra` a través de CheapestInference para equilibrar calidad y costo.
+- Cada resultado permite **Publicar**, **Programar**, **Guardar**, **Favorito** o **Descartar**.
+- El generador masivo anterior sigue disponible dentro de un panel desplegable y ahora elimina todos los slots anteriores a la hora actual + 10 minutos cuando la fecha inicial es hoy.
+- Nueva sección **Programar post**, inspirada en Business Suite: texto, imagen, página, categoría, fecha y hora exactas.
+- La programación individual y el calendario bloquean horarios pasados y el servidor vuelve a validar que Meta reciba una fecha con al menos 10 minutos de anticipación.
+- **Favoritos** ahora tiene acceso directo desde el sidebar.
+- El calendario usa un ancho mayor, tarjetas más grandes, tipografías más legibles, indicador de hora actual y estado visual para slots vencidos.
+
+### Variables nuevas
+```env
+CHEAPESTINFERENCE_API_KEY=
+CHEAPESTINFERENCE_MODEL=gpt-5.6-terra
+CHEAPESTINFERENCE_BASE_URL=https://api.cheapestinference.com/v1
+```
+
+La API key es exclusivamente server-side. No uses prefijo `NEXT_PUBLIC_`.

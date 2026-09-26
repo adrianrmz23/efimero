@@ -9,6 +9,7 @@ const groups:{title:string;description:string;tools:Tool[]}[]=[
   {title:"Inteligencia editorial",description:"Herramientas de análisis que no necesitas tener siempre a la vista.",tools:[
     {tab:"profile",title:"Huella editorial",description:"Patrones históricos y voz propia de la página.",icon:Fingerprint},
     {tab:"learning",title:"Aprendizaje",description:"Qué está funcionando en tu contenido propio.",icon:BrainCircuit},
+    {tab:"learningAgent",title:"Learning Agent",description:"Aprende patrones de páginas externas y los combina con tu RAG propio.",icon:BrainCircuit,tag:"Nuevo"},
     {tab:"experiments",title:"Experimentos",description:"Variantes y pruebas de copy.",icon:FlaskConical},
     {tab:"audience",title:"Audiencia",description:"Señales extraídas de comentarios y conversación.",icon:MessagesSquare},
     {tab:"fatigue",title:"Fatiga",description:"Detecta repetición de temas, hooks y categorías.",icon:Gauge},

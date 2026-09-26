@@ -13,6 +13,8 @@ export async function GET(){
       supabaseAdmin:Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),
       openai:Boolean(process.env.OPENAI_API_KEY),
       openaiModel:process.env.OPENAI_MODEL||null,
+      cheapestInference:Boolean(process.env.CHEAPESTINFERENCE_API_KEY||process.env.CHEAPINFERENCE_API_KEY),
+      cheapestInferenceModel:process.env.CHEAPESTINFERENCE_MODEL||"gpt-5.6-terra",
       metaOauth:Boolean(process.env.META_APP_ID&&process.env.META_APP_SECRET&&process.env.META_OAUTH_REDIRECT_URI&&process.env.META_TOKEN_ENCRYPTION_KEY),
       graphVersion:process.env.META_GRAPH_VERSION||null,
     }

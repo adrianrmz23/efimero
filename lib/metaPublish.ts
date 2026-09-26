@@ -42,6 +42,13 @@ export async function publishToFacebook(input:PublishInput){
     error.status=422;error.compliance=compliance;throw error;
   }
 
+  if(scheduledAt&&!publishNow){
+    const target=new Date(scheduledAt);
+    if(Number.isNaN(target.getTime())){const error:any=new Error("La fecha de programación no es válida.");error.status=400;throw error;}
+    const minFuture=Date.now()+10*60_000;
+    if(target.getTime()<minFuture){const error:any=new Error("La publicación debe programarse al menos 10 minutos después de la hora actual.");error.status=400;throw error;}
+  }
+
   const token=(await resolveAnyStoredPageToken(pageId)).token;
   const scheduleEpoch=scheduledAt?Math.floor(new Date(scheduledAt).getTime()/1000):0;
   let result:any;
