@@ -129,3 +129,7 @@ No se requieren nuevas variables de entorno respecto de los Bloques 9–12.
 
 ## Acceso privado
 Esta versión incluye login privado con Supabase Auth. Lee `AUTH_SETUP.md` antes de desplegar.
+
+## OAuth de Facebook dentro de Efímero
+
+La versión de infraestructura OAuth permite conectar Facebook desde la propia plataforma y sustituye el flujo manual del Graph API Explorer. Consulta `META_OAUTH_SETUP.md` para configurar Supabase, Vercel y Meta Developers.

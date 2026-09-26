@@ -15,7 +15,7 @@ export default function EditorialCalendar({items,onChange,onOpenCreator,onSaveTo
   const [statusFilter,setStatusFilter]=useState("Todos"); const [categoryFilter,setCategoryFilter]=useState("Todas");
   const [busy,setBusy]=useState<string|null>(null); const [message,setMessage]=useState(""); const [error,setError]=useState("");
   const [weekOffset,setWeekOffset]=useState(0);
-  useEffect(()=>{fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{setPages(d.pages||[]);if(d.pages?.length)setPageId(d.pages[0].id)}).catch(()=>{})},[]);
+  useEffect(()=>{fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{setPages(d.pages||[]);if(d.pages?.length)setPageId(d.activePageId||d.pages[0].id)}).catch(()=>{})},[]);
   const page=pages.find(p=>p.id===pageId);
   const start=useMemo(()=>{const d=new Date();d.setHours(12,0,0,0);const delta=(d.getDay()+6)%7;d.setDate(d.getDate()-delta+weekOffset*7);return d},[weekOffset]);
   const days=useMemo(()=>Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(d.getDate()+i);return iso(d)}),[start]);

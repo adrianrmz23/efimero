@@ -102,7 +102,7 @@ export default function FacebookAnalytics({library,toolStats,onOpenMeta}:Props){
     try{
       const r=await fetch("/api/meta/pages",{cache:"no-store"});const data=await r.json();setConfigured(Boolean(data.configured));
       if(!r.ok){setError(data.error||"No fue posible consultar tus páginas.");return}
-      const list=data.pages||[];setPages(list);if(list.length)setPageId(old=>old||list[0].id);
+      const list=data.pages||[];setPages(list);if(list.length)setPageId(old=>old||data.activePageId||list[0].id);
     }catch{setConfigured(false);setError("No fue posible conectar con Meta desde el servidor.")}
     finally{setLoadingPages(false)}
   }

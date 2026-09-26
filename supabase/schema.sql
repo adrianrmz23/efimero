@@ -208,3 +208,44 @@ begin
     execute format('create policy "efimero_authenticated_full_access" on public.%I for all to authenticated using (true) with check (true)', t);
   end loop;
 end $$;
+
+-- Infra OAuth Meta: tokens cifrados y páginas administradas únicamente desde el servidor.
+create table if not exists efimero_meta_connections (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null unique references auth.users(id) on delete cascade,
+  owner_email text,
+  facebook_user_id text not null,
+  facebook_user_name text,
+  encrypted_user_token text not null,
+  user_token_expires_at timestamptz,
+  granted_scopes jsonb not null default '[]'::jsonb,
+  active_page_id text,
+  status text not null default 'connected',
+  connected_at timestamptz not null default now(),
+  last_verified_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists efimero_meta_pages (
+  id uuid primary key default gen_random_uuid(),
+  connection_id uuid not null references efimero_meta_connections(id) on delete cascade,
+  page_id text not null,
+  page_name text not null,
+  category text,
+  picture_url text,
+  fan_count bigint,
+  tasks jsonb not null default '[]'::jsonb,
+  encrypted_page_token text not null,
+  is_active boolean not null default false,
+  connected_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(connection_id,page_id)
+);
+
+create index if not exists efimero_meta_pages_connection_idx on efimero_meta_pages(connection_id,page_name);
+create index if not exists efimero_meta_pages_active_idx on efimero_meta_pages(connection_id,is_active);
+
+alter table efimero_meta_connections enable row level security;
+alter table efimero_meta_pages enable row level security;
+-- No se crean políticas para authenticated: estas dos tablas contienen secretos cifrados
+-- y sólo se leen/escriben desde rutas de servidor usando SUPABASE_SERVICE_ROLE_KEY.

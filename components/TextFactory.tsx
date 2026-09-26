@@ -99,7 +99,7 @@ export default function TextFactory({library,editorialProfile,onSaveItems,onOpen
     try{
       const r=await fetch("/api/meta/pages",{cache:"no-store"});const data=await r.json();
       if(!r.ok)throw new Error(data.error||"No fue posible consultar tus páginas.");
-      const list=data.pages||[];setPages(list);if(list.length)setPageId(old=>old||list[0].id);
+      const list=data.pages||[];setPages(list);if(list.length)setPageId(old=>old||data.activePageId||list[0].id);
     }catch(e:any){setError(e?.message||"No fue posible consultar Meta.")}
     finally{setLoadingPages(false)}
   }

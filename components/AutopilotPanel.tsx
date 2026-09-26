@@ -14,7 +14,7 @@ export default function AutopilotPanel({library,editorialProfile,onQueue}:Props)
   const [days,setDays]=useState(7);const [perDay,setPerDay]=useState(6);const [start,setStart]=useState("08:00");const [end,setEnd]=useState("22:00");
   const [mode,setMode]=useState<"manual"|"semi"|"auto">("semi");const [objective,setObjective]=useState("Compartibilidad");const [category,setCategory]=useState("Automática");
   const [busy,setBusy]=useState(false);const [message,setMessage]=useState("");const [error,setError]=useState("");
-  useEffect(()=>{fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{setPages(d.pages||[]);if(d.pages?.length)setPageId(d.pages[0].id)}).catch(()=>{})},[]);
+  useEffect(()=>{fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{setPages(d.pages||[]);if(d.pages?.length)setPageId(d.activePageId||d.pages[0].id)}).catch(()=>{})},[]);
   const currentPage=pages.find(p=>p.id===pageId);
   const examples=useMemo(()=>library.filter(x=>x.source!=="reference"&&(!x.sourcePageId||x.sourcePageId===pageId)).sort((a,b)=>(b.performanceScore||0)-(a.performanceScore||0)).slice(0,24).map(x=>({text:x.text,category:x.category,reactions:x.reactions,comments:x.comments,shares:x.shares,performanceScore:x.performanceScore,structure:x.extractionMetadata?.structure,hook:x.extractionMetadata?.hook})),[library,pageId]);
 

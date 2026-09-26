@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { graphBase, resolvePageToken } from "../_shared";
+import { buildAppSecretProof } from "@/lib/metaServer";
 import { localComplianceReview } from "@/lib/metaCompliance";
 
 function parseDataUrl(dataUrl:string){
@@ -36,6 +37,7 @@ export async function POST(request:NextRequest){
     if(imageDataUrl||imageUrl){
       const form=new FormData();
       form.set("access_token",token);
+      const proof=buildAppSecretProof(token);if(proof)form.set("appsecret_proof",proof);
       if(message)form.set("caption",message);
       if(!publishNow){form.set("published","false");if(scheduleEpoch)form.set("scheduled_publish_time",String(scheduleEpoch));}
       if(imageDataUrl){
@@ -45,7 +47,8 @@ export async function POST(request:NextRequest){
       result=await postForm(`${pageId}/photos`,form);
     }else{
       const form=new FormData();
-      form.set("access_token",token);form.set("message",message);
+      form.set("access_token",token);
+      const proof=buildAppSecretProof(token);if(proof)form.set("appsecret_proof",proof);form.set("message",message);
       if(!publishNow){form.set("published","false");if(scheduleEpoch)form.set("scheduled_publish_time",String(scheduleEpoch));}
       result=await postForm(`${pageId}/feed`,form);
     }

@@ -181,6 +181,11 @@ function extractReferencePattern(text:string){
 
 export default function EfimeroApp(){
   const [tab,setTab]=useState<Tab>("creator");
+  useEffect(()=>{
+    const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
+    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics"];
+    if(section&&allowed.includes(section))setTab(section);
+  },[]);
   const [mobileNav,setMobileNav]=useState(false);
   const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
   const [postType,setPostType]=useState<PostType>("Texto");

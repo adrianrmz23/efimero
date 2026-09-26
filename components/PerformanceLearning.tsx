@@ -36,7 +36,7 @@ export default function PerformanceLearning({library,onOpenFactory}:Props){
   const [profile,setProfile]=useState<LearningProfile|null>(null);const [saving,setSaving]=useState(false);const [notice,setNotice]=useState("");
   useEffect(()=>{void loadPages()},[]);
   useEffect(()=>{try{const raw=localStorage.getItem("efimero_learning_profiles");if(!raw||!pageId)return;const map=JSON.parse(raw);if(map?.[pageId])setProfile(map[pageId])}catch{}},[pageId]);
-  async function loadPages(){setLoadingPages(true);try{const r=await fetch("/api/meta/pages",{cache:"no-store"});const d=await r.json();const list=d.pages||[];setPages(list);if(list.length)setPageId(x=>x||list[0].id)}finally{setLoadingPages(false)}}
+  async function loadPages(){setLoadingPages(true);try{const r=await fetch("/api/meta/pages",{cache:"no-store"});const d=await r.json();const list=d.pages||[];setPages(list);if(list.length)setPageId(x=>x||d.activePageId||list[0].id)}finally{setLoadingPages(false)}}
   const page=pages.find(p=>p.id===pageId);
   const owned=useMemo(()=>library.filter(x=>x.text?.trim()&&x.source!=="reference"&&(!pageId||x.sourcePageId===pageId||(!x.sourcePageId&&pages.length===1))),[library,pageId,pages.length]);
   const measured=useMemo(()=>owned.filter(x=>weighted(x)>0),[owned]);
