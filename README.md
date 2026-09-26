@@ -1,3 +1,7 @@
+## V1.6 · Programador masivo de imágenes
+
+Se añadió **Principal → Bulk imágenes** para subir lotes visuales y repartirlos automáticamente por intervalos y días. Consulta `V1_6_BULK_VISUAL.md`.
+
 # Efímero Content Engine — V1.3 · Learning Agent
 
 ## Bloque 30 — Learning Agent

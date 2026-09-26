@@ -34,10 +34,11 @@ import LearningAgent from "@/components/LearningAgent";
 import ControlCenter from "@/components/ControlCenter";
 import QuickPostStudio from "@/components/QuickPostStudio";
 import SinglePostScheduler from "@/components/SinglePostScheduler";
+import BulkImageScheduler from "@/components/BulkImageScheduler";
 import LogoutButton from "@/components/auth/LogoutButton";
 import { persistWorkingPage, resolveWorkingPageId, WORKING_PAGE_EVENT } from "@/lib/workingPage";
 
-type Tab = "creator" | "publisher" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality" | "radar" | "learningAgent" | "control";
+type Tab = "creator" | "publisher" | "bulkImages" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations" | "scheduler" | "loop" | "dataset" | "production" | "agent" | "score" | "weekly" | "quality" | "radar" | "learningAgent" | "control";
 const controlTabs: Tab[] = ["profile","learning","learningAgent","experiments","audience","fatigue","score","weekly","autopilot","agent","scheduler","loop","dataset","meta","compliance","categories","images","production","operations","quality"];
 type PostType = "Texto" | "Imagen" | "Híbrido";
 type ScheduleItem = { id:string; date:string; time:string; category:string; text:string; format:"Texto"|"Imagen"; status:"Borrador"|"Revisión"|"Aprobado"|"Programado"|"Publicado"|"Error"; similarity?:number; imageDataUrl?:string; imageUrl?:string; pageId?:string; pageName?:string; metaPostId?:string; compliance?:any; publishError?:string; autopilot?:boolean };
@@ -204,7 +205,7 @@ export default function EfimeroApp(){
   const [publisherPrefill,setPublisherPrefill]=useState<{text:string;category:string;nonce:number}|null>(null);
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
-    const allowed:Tab[]=["creator","publisher","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality","radar","learningAgent","control"];
+    const allowed:Tab[]=["creator","publisher","bulkImages","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations","scheduler","loop","dataset","production","agent","score","weekly","quality","radar","learningAgent","control"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
   useEffect(()=>{
@@ -538,6 +539,7 @@ export default function EfimeroApp(){
         <SidebarGroup label="Principal" collapsed={sidebarCollapsed}>
           <Nav active={tab==="creator"} onClick={()=>{setTab("creator");setMobileNav(false)}} icon={WandSparkles} label="Crear"/>
           <Nav active={tab==="publisher"} onClick={()=>{setTab("publisher");setMobileNav(false)}} icon={CalendarDays} label="Programar post"/>
+          <Nav active={tab==="bulkImages"} onClick={()=>{setTab("bulkImages");setMobileNav(false)}} icon={ImageIcon} label="Bulk imágenes"/>
           <Nav active={tab==="factory"} onClick={()=>{setTab("factory");setMobileNav(false)}} icon={Zap} label="Fábrica"/>
           <Nav active={tab==="radar"} onClick={()=>{setTab("radar");setMobileNav(false)}} icon={Search} label="Radar inspiración"/>
           <Nav active={tab==="calendar"} onClick={()=>{setTab("calendar");setMobileNav(false)}} icon={CalendarDays} label="Calendario"/>
@@ -559,7 +561,7 @@ export default function EfimeroApp(){
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>V1.5 · New Interface</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>V1.6 · Visual Queue</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -609,6 +611,8 @@ export default function EfimeroApp(){
       </>}
 
       {tab==="publisher"&&<SinglePostScheduler categories={categories} prefill={publisherPrefill} onAdd={(item:any)=>setSchedule(current=>{const without=current.filter(x=>x.id!==item.id);return [item,...without] as ScheduleItem[]})} onSaveFavorite={(item:any)=>saveFactoryItems([item])}/>}
+
+      {tab==="bulkImages"&&<BulkImageScheduler onAddMany={(items:any[])=>setSchedule(current=>{const byId=new Map(current.map(x=>[x.id,x]));for(const item of items)byId.set(item.id,item as ScheduleItem);return Array.from(byId.values()) as ScheduleItem[]})}/>}
 
       {tab==="calendar"&&<EditorialCalendar items={schedule} onChange={(items:any[])=>setSchedule(items as ScheduleItem[])} onOpenCreator={()=>setTab("creator")} onSaveToLibrary={saveToLibrary}/>}
 
