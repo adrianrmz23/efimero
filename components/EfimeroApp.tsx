@@ -2,8 +2,8 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive, BarChart3, Bookmark, BrainCircuit, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, Database,
-  ExternalLink, FileText, Filter, Fingerprint, Flame, FlaskConical, Image as ImageIcon, Layers3, LayoutDashboard, Library, Link2, Menu, MessageCircle, MessagesSquare, Plus, RefreshCw, RadioTower,
+  Archive, Activity, BarChart3, Bookmark, BrainCircuit, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCheck, Copy, Database,
+  ExternalLink, FileText, Filter, Fingerprint, Flame, FlaskConical, Gauge, Image as ImageIcon, Layers3, LayoutDashboard, Library, Link2, Menu, MessageCircle, MessagesSquare, Plus, RefreshCw, RadioTower, ShieldCheck,
   Search, Settings2, Smile, Sparkles, Star, Trash2, TrendingUp, Type as TypeIcon, Upload, WandSparkles, X, Zap,
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -17,9 +17,13 @@ import PerformanceLearning from "@/components/PerformanceLearning";
 import CopyExperiments from "@/components/CopyExperiments";
 import AudienceVoice from "@/components/AudienceVoice";
 import ExecutiveDashboard from "@/components/ExecutiveDashboard";
+import TextQueue from "@/components/TextQueue";
+import FatigueRadar from "@/components/FatigueRadar";
+import ComplianceCenter from "@/components/ComplianceCenter";
+import OperationsCenter from "@/components/OperationsCenter";
 import LogoutButton from "@/components/auth/LogoutButton";
 
-type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics";
+type Tab = "creator" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "audience" | "executive" | "autopilot" | "images" | "meta" | "analytics" | "queue" | "fatigue" | "compliance" | "operations";
 type PostType = "Texto" | "Imagen" | "Híbrido";
 type ScheduleItem = { id:string; date:string; time:string; category:string; text:string; format:"Texto"|"Imagen"; status:"Borrador"|"Revisión"|"Aprobado"|"Programado"|"Publicado"|"Error"; similarity?:number; imageDataUrl?:string; imageUrl?:string; pageId?:string; pageName?:string; metaPostId?:string; compliance?:any; publishError?:string; autopilot?:boolean };
 type Category = { id:string; name:string; emoji:string; enabled:boolean };
@@ -183,7 +187,7 @@ export default function EfimeroApp(){
   const [tab,setTab]=useState<Tab>("creator");
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
-    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics"];
+    const allowed:Tab[]=["creator","calendar","library","categories","profile","factory","learning","experiments","audience","executive","autopilot","images","meta","analytics","queue","fatigue","compliance","operations"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
   const [mobileNav,setMobileNav]=useState(false);
@@ -506,6 +510,7 @@ export default function EfimeroApp(){
           <Nav active={tab==="factory"} onClick={()=>{setTab("factory");setMobileNav(false)}} icon={Zap} label="Fábrica"/>
           <Nav active={tab==="calendar"} onClick={()=>{setTab("calendar");setMobileNav(false)}} icon={CalendarDays} label="Calendario"/>
           <Nav active={tab==="autopilot"} onClick={()=>{setTab("autopilot");setMobileNav(false)}} icon={Sparkles} label="Autopilot"/>
+          <Nav active={tab==="queue"} onClick={()=>{setTab("queue");setMobileNav(false)}} icon={ClipboardCheck} label="Bandeja"/>
         </SidebarGroup>
 
         <SidebarGroup label="Inteligencia" collapsed={sidebarCollapsed}>
@@ -516,22 +521,25 @@ export default function EfimeroApp(){
           <Nav active={tab==="audience"} onClick={()=>{setTab("audience");setMobileNav(false)}} icon={MessagesSquare} label="Audiencia"/>
           <Nav active={tab==="analytics"} onClick={()=>{setTab("analytics");setMobileNav(false)}} icon={BarChart3} label="Analytics"/>
           <Nav active={tab==="executive"} onClick={()=>{setTab("executive");setMobileNav(false)}} icon={LayoutDashboard} label="Resumen"/>
+          <Nav active={tab==="fatigue"} onClick={()=>{setTab("fatigue");setMobileNav(false)}} icon={Gauge} label="Fatiga"/>
         </SidebarGroup>
 
         <SidebarGroup label="Facebook" collapsed={sidebarCollapsed}>
           <Nav active={tab==="meta"} onClick={()=>{setTab("meta");setMobileNav(false)}} icon={RadioTower} label="Meta"/>
+          <Nav active={tab==="compliance"} onClick={()=>{setTab("compliance");setMobileNav(false)}} icon={ShieldCheck} label="Compliance"/>
         </SidebarGroup>
 
         <SidebarGroup label="Configuración" collapsed={sidebarCollapsed}>
           <Nav active={tab==="categories"} onClick={()=>{setTab("categories");setMobileNav(false)}} icon={Layers3} label="Categorías"/>
           <Nav active={tab==="images"} onClick={()=>{setTab("images");setMobileNav(false)}} icon={ImageIcon} label="Imágenes"/>
+          <Nav active={tab==="operations"} onClick={()=>{setTab("operations");setMobileNav(false)}} icon={Activity} label="Operaciones"/>
         </SidebarGroup>
       </div>
 
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>Bloques 13–16</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>Bloques 17–20</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -607,6 +615,14 @@ export default function EfimeroApp(){
       {tab==="meta"&&<MetaPanel existingPostIds={library.map(x=>x.platformPostId).filter(Boolean) as string[]} onImported={(items:any[])=>setLibrary(current=>{const ids=new Set(current.map(x=>x.platformPostId).filter(Boolean));const fresh=items.filter(x=>!ids.has(x.platformPostId));return [...fresh,...current]})}/>}
 
       {tab==="analytics"&&<FacebookAnalytics library={library} toolStats={{calendars:history.length,scheduled:schedule.length,library:library.length,duplicates}} onOpenMeta={()=>setTab("meta")}/>}
+
+      {tab==="queue"&&<TextQueue items={schedule} onChange={(items:any[])=>setSchedule(items as ScheduleItem[])} onOpenCalendar={()=>setTab("calendar")}/>}
+
+      {tab==="fatigue"&&<FatigueRadar library={library} schedule={schedule}/>}
+
+      {tab==="compliance"&&<ComplianceCenter items={schedule} onChange={(items:any[])=>setSchedule(items as ScheduleItem[])}/>}
+
+      {tab==="operations"&&<OperationsCenter schedule={schedule} library={library}/>}
     </main>
   </div>
 }

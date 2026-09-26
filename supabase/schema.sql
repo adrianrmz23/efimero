@@ -190,6 +190,17 @@ create table if not exists efimero_audience_analyses (
 );
 create index if not exists efimero_audience_analyses_page_idx on efimero_audience_analyses(page_id, created_at desc);
 
+
+-- Bloques 17–20: bandeja editorial, fatiga, compliance visible y operaciones
+create table if not exists efimero_fatigue_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  sample_size integer not null default 0,
+  score numeric not null default 0,
+  snapshot jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists efimero_fatigue_snapshots_created_idx on efimero_fatigue_snapshots(created_at desc);
+
 -- Infra privada: bloquear acceso anónimo a los datos de Efímero.
 -- IMPORTANTE: antes de usar estas políticas, crea tu usuario en Supabase Auth
 -- y desactiva el registro público en Authentication > Providers > Email.
@@ -199,7 +210,7 @@ declare
   tables text[] := array[
     'efimero_categories','efimero_content_library','efimero_calendars','efimero_scheduled_posts',
     'efimero_editorial_profiles','efimero_meta_sync_runs','efimero_compliance_reviews','efimero_autopilot_rules',
-    'efimero_media_assets','efimero_learning_profiles','efimero_copy_experiments','efimero_audience_analyses'
+    'efimero_media_assets','efimero_learning_profiles','efimero_copy_experiments','efimero_audience_analyses','efimero_fatigue_snapshots'
   ];
 begin
   foreach t in array tables loop

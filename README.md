@@ -133,3 +133,16 @@ Esta versión incluye login privado con Supabase Auth. Lee `AUTH_SETUP.md` antes
 ## OAuth de Facebook dentro de Efímero
 
 La versión de infraestructura OAuth permite conectar Facebook desde la propia plataforma y sustituye el flujo manual del Graph API Explorer. Consulta `META_OAUTH_SETUP.md` para configurar Supabase, Vercel y Meta Developers.
+
+## Bloques 17–20 · Text Ops
+
+Esta entrega mantiene el foco en texto y añade cuatro módulos operativos:
+
+- **17 · Bandeja editorial:** revisión centralizada, Compliance y aprobación antes de calendario/publicación.
+- **18 · Fatiga:** detecta saturación de categorías, hooks recurrentes y duplicados exactos.
+- **19 · Compliance:** centro visible para probar textos, revalidar alertas y consultar auditoría reciente.
+- **20 · Operaciones:** salud de sesión, Supabase, OpenAI, Meta OAuth y preparación de la cola.
+
+También se rediseñaron las acciones del conector Meta para eliminar botones nativos del navegador y mantener la misma interfaz de Efímero.
+
+Después de actualizar, ejecuta `supabase/schema.sql` de nuevo para crear `efimero_fatigue_snapshots` y su política RLS.
