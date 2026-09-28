@@ -4,13 +4,38 @@ import { getServerUser } from "@/lib/serverAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const fallback = [
-  "¿Qué canción te lleva directo a otra etapa de tu vida?",
+  "¿Qué comida podrías repetir toda la semana sin cansarte?",
   "¿Qué te dijo tu mamá cuando vio algo tuyo que no esperaba?",
-  "Me gustaría ser más sociable, pero mi cara no coopera 😂",
+  "¿Qué compra pequeña terminó siendo mucho más útil de lo que imaginabas?",
   "Sin calcular demasiado: 10 × 10 − 2 + 13 = ?",
-  "¿Qué pequeña cosa mejora tu día casi siempre?",
-  "Hay recuerdos que vuelven con una canción y ya no se van en todo el día.",
+  "¿Qué hábito de adulto jurabas que nunca ibas a tener?",
+  "¿Qué lugar de tu infancia recuerdas con más detalle de lo normal?",
 ];
+
+const QUESTION_THEMES = [
+  "vida cotidiana y hábitos",
+  "familia e infancia",
+  "comida y antojos",
+  "amistades y relaciones cotidianas",
+  "trabajo, escuela o vida adulta",
+  "decisiones y preferencias personales",
+  "humor y situaciones incómodas",
+  "recuerdos de lugares y etapas",
+  "compras, objetos y pequeñas manías",
+  "tecnología, internet y costumbres digitales",
+  "viajes, lugares y planes",
+  "hobbies, juegos y tiempo libre",
+  "tradiciones, fines de semana y celebraciones",
+  "retos mentales o elecciones rápidas",
+  "música y entretenimiento",
+] as const;
+
+function questionThemeFor(recentTexts:string[]){
+  const recent=recentTexts.join(" ").toLowerCase();
+  const musicHeavy=/canci[oó]n|m[uú]sica|artista|playlist|concierto/.test(recent);
+  const usable=musicHeavy?QUESTION_THEMES.filter(x=>!x.startsWith("música")):QUESTION_THEMES;
+  return usable[recentTexts.length%usable.length]||QUESTION_THEMES[0];
+}
 
 function extractJson(text:string){
   const clean=String(text||"").replace(/```json/gi,"").replace(/```/g,"").trim();
@@ -72,12 +97,17 @@ export async function POST(request: NextRequest) {
   const mode=String(body.mode||"calendar");
   const interactionStyle=String(body.interactionStyle||"Mixto");
   const objective=String(body.objective||"Generar identificación y conversación natural.");
+  const recentTexts=Array.isArray(body.recentTexts)?body.recentTexts.slice(-10).map(String).filter(Boolean):[];
+  const questionTheme=category.toLowerCase().includes("pregunta")?questionThemeFor(recentTexts):"";
   const patterns=await getLearningPatterns(category);
   const profileContext = profile
     ? `\nHuella editorial propia:\n- ${String(profile.generationInstruction || "")}\n- Promedio: ${Number(profile.avgWords || 0)} palabras.\n- Reglas: ${(Array.isArray(profile.rules) ? profile.rules : []).join(" | ")}\n- Evitar: ${(Array.isArray(profile.avoid) ? profile.avoid : []).join(" | ")}`
     : "";
   const patternContext=patterns.length?`\nPatrones abstractos aprendidos de referencias externas (usa mecanismos, NO copies frases):\n${patterns.map((p:any)=>`- ${p.title}: hook ${p.hook_type||""}; estructura ${p.structure||""}; tema ${p.theme||""}; mecanismo ${p.mechanism||""}; tono ${p.tone||""}; señal ${Math.round(Number(p.avg_engagement_score||0))}/100`).join("\n")}`:"";
-  const quickRules=mode==="quick"?`\nMODO RÁPIDO DE INTERACCIÓN NATURAL:\n- Tipo solicitado: ${interactionStyle}.\n- Objetivo: ${objective}.\n- Prioriza 8 a 28 palabras. Una sola idea por publicación.\n- Debe entenderse en menos de 2 segundos.\n- Usa preguntas personales concretas, humor identificable, nostalgia, dilemas o retos ligeros cuando corresponda.\n- Evita frases motivacionales genéricas y explicaciones largas.\n- Una pregunta natural es válida; NO ordenes interactuar.`:"\nPrioriza copies breves, concretos y variados; evita relleno.";
+  const recentContext=recentTexts.length?`\nÚLTIMAS SALIDAS DE ESTA SESIÓN (NO repitas tema, objeto, pregunta ni estructura):\n${recentTexts.map((x:string)=>`- ${x}`).join("\n")}`:"";
+  const themeBatch=category.toLowerCase().includes("pregunta")?QUESTION_THEMES.slice(0,Math.min(Math.max(count,6),QUESTION_THEMES.length)):[];
+  const questionDiversity=questionTheme?`\nREGLA ESPECIAL PARA PREGUNTAS:\n- Tema OBLIGATORIO de esta generación: ${questionTheme}.\n- No uses canciones, música, artistas, playlists o conciertos salvo que el tema obligatorio sea música y entretenimiento.\n- Formula una pregunta concreta, fácil de entender y diferente a las últimas salidas.\n- Alterna entre recuerdo, preferencia, experiencia, dilema, humor, hábito o elección rápida según el tema.`:themeBatch.length?`\nREGLA ESPECIAL PARA PREGUNTAS EN LOTE:\n- Reparte las salidas entre temas DISTINTOS. Usa esta lista como rotación: ${themeBatch.join(" | ")}.\n- No repitas el mismo asunto en dos publicaciones consecutivas.\n- Música/entretenimiento puede aparecer como máximo en una pieza del lote.\n- Alterna tipos de pregunta: recuerdo, preferencia, experiencia, dilema, humor, hábito y elección rápida.`:"";
+  const quickRules=mode==="quick"?`\nMODO RÁPIDO DE INTERACCIÓN NATURAL:\n- Tipo solicitado: ${interactionStyle}.\n- Objetivo: ${objective}.\n- Prioriza 8 a 28 palabras. Una sola idea por publicación.\n- Debe entenderse en menos de 2 segundos.\n- Usa preguntas personales concretas, humor identificable, nostalgia, dilemas o retos ligeros cuando corresponda.\n- Evita frases motivacionales genéricas y explicaciones largas.\n- Una pregunta natural es válida; NO ordenes interactuar.${questionDiversity}${recentContext}`:`\nPrioriza copies breves, concretos y variados; evita relleno.${questionDiversity}`;
   const prompt = `Crea ${count} publicaciones NUEVAS en español para Facebook, categoría "${category}".${quickRules}${profileContext}${patternContext}
 
 Ejemplos propios útiles (solo para captar tono; no copies):

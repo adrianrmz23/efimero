@@ -38,6 +38,7 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
   const [pages,setPages]=useState<Page[]>([]);
   const [pageId,setPageId]=useState("");
   const [saved,setSaved]=useState<""|"saved"|"favorite">("");
+  const [recentGenerated,setRecentGenerated]=useState<string[]>([]);
 
   useEffect(()=>{
     const onWorkingPage=(event:Event)=>{const value=(event as CustomEvent<{pageId:string}>).detail?.pageId;if(value)setPageId(value)};
@@ -51,10 +52,10 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
   async function generate(){
     setBusy(true);setError("");setNotice("");setSaved("");
     try{
-      const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category,count:1,examples,profile:editorialProfile||null,mode:"quick",interactionStyle:style,objective})});
+      const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category,count:1,examples,profile:editorialProfile||null,mode:"quick",interactionStyle:style,objective,recentTexts:recentGenerated})});
       const d=await r.json();if(!r.ok){const detail=Array.isArray(d.details)&&d.details.length?` ${d.details.join(" · ")}`:"";throw new Error(`${d.error||"No fue posible generar el texto."}${detail}`)}
       const value=String(d.items?.[0]||"").trim();if(!value)throw new Error("El modelo no devolvió una publicación utilizable.");
-      setText(value);setModel(`${d.model||"IA"}${d.source?` · ${d.source}`:""}`);if(d.warning)setNotice(`Generado con IA secundaria. ${d.warning}`);
+      setText(value);setRecentGenerated(prev=>[...prev,value].slice(-10));setModel(`${d.model||"IA"}${d.source?` · ${d.source}`:""}`);if(d.warning)setNotice(`Generado con IA secundaria. ${d.warning}`);
     }catch(e:any){setError(e?.message||"Falló la generación.")}finally{setBusy(false)}
   }
 
