@@ -52,9 +52,9 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
     setBusy(true);setError("");setNotice("");setSaved("");
     try{
       const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category,count:1,examples,profile:editorialProfile||null,mode:"quick",interactionStyle:style,objective})});
-      const d=await r.json();if(!r.ok)throw new Error(d.error||"No fue posible generar el texto.");
+      const d=await r.json();if(!r.ok){const detail=Array.isArray(d.details)&&d.details.length?` ${d.details.join(" · ")}`:"";throw new Error(`${d.error||"No fue posible generar el texto."}${detail}`)}
       const value=String(d.items?.[0]||"").trim();if(!value)throw new Error("El modelo no devolvió una publicación utilizable.");
-      setText(value);setModel(`${d.model||"IA"}${d.source?` · ${d.source}`:""}`);
+      setText(value);setModel(`${d.model||"IA"}${d.source?` · ${d.source}`:""}`);if(d.warning)setNotice(`Generado con IA secundaria. ${d.warning}`);
     }catch(e:any){setError(e?.message||"Falló la generación.")}finally{setBusy(false)}
   }
 
@@ -78,7 +78,7 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
   }
 
   return <section className="quickStudio">
-    <div className="quickStudioHeader"><div><span className="overline">GENERADOR RÁPIDO · CHEAPESTINFERENCE</span><h1>Una publicación a la vez</h1><p>Genera un copy corto con intención conversacional y decide después si publicarlo, guardarlo, programarlo o descartarlo.</p></div><div className="modelPill"><Sparkles size={16}/><span>GPT-5.6 Terra</span><small>calidad/costo</small></div></div>
+    <div className="quickStudioHeader"><div><span className="overline">GENERADOR RÁPIDO · CHEAPER INFERENCE</span><h1>Una publicación a la vez</h1><p>Genera un copy corto con intención conversacional y decide después si publicarlo, guardarlo, programarlo o descartarlo.</p></div><div className="modelPill"><Sparkles size={16}/><span>{model||"GPT-5.6 Terra"}</span><small>IA real · calidad/costo</small></div></div>
     <div className="quickStudioGrid">
       <div className="quickControls">
         <label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}>{enabled.map(c=><option key={c.name}>{c.name}</option>)}</select></label>

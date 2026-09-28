@@ -30,20 +30,25 @@ async function getLearningPatterns(category:string){
   }catch{return [] as any[]}
 }
 
-async function cheapestInference(prompt:string,count:number){
-  const apiKey=process.env.CHEAPESTINFERENCE_API_KEY||process.env.CHEAPINFERENCE_API_KEY;
+async function cheaperInference(prompt:string,count:number){
+  const apiKey=process.env.CHEAPERINFERENCE_API_KEY||process.env.CHEAPESTINFERENCE_API_KEY||process.env.CHEAPINFERENCE_API_KEY;
   if(!apiKey)return null;
-  const model=process.env.CHEAPESTINFERENCE_MODEL||"gpt-5.6-terra";
-  const base=(process.env.CHEAPESTINFERENCE_BASE_URL||"https://api.cheapestinference.com/v1").replace(/\/$/,"");
+  const model=process.env.CHEAPERINFERENCE_MODEL||process.env.CHEAPESTINFERENCE_MODEL||process.env.CHEAPINFERENCE_MODEL||"gpt-5.6-terra";
+  const configured=process.env.CHEAPERINFERENCE_BASE_URL||process.env.CHEAPESTINFERENCE_BASE_URL||process.env.CHEAPINFERENCE_BASE_URL||"https://api.cheaperinference.com/v1";
+  // Versiones anteriores de Efímero documentaron por error "cheapestinference".
+  // Si ese valor sigue guardado en Vercel, lo corregimos automáticamente.
+  const base=configured.replace("api.cheapestinference.com","api.cheaperinference.com").replace(/\/$/,"");
   const response=await fetch(`${base}/chat/completions`,{
     method:"POST",
-    headers:{Authorization:`Bearer ${apiKey}`,"Content-Type":"application/json"},
+    headers:{Authorization:`Bearer ${apiKey}`,"Content-Type":"application/json","X-CI-Concise":"1"},
     body:JSON.stringify({model,messages:[{role:"system",content:"Eres un redactor senior de Facebook especializado en copies breves, naturales y memorables. Devuelves JSON válido sin Markdown."},{role:"user",content:prompt}],max_tokens:Math.max(450,count*160)}),
+    cache:"no-store",
   });
-  if(!response.ok){const detail=await response.text();throw new Error(`CheapestInference respondió ${response.status}: ${detail.slice(0,260)}`)}
+  if(!response.ok){const detail=await response.text();throw new Error(`Cheaper Inference respondió ${response.status}: ${detail.slice(0,260)}`)}
   const data=await response.json();const content=data?.choices?.[0]?.message?.content||"";const parsed=extractJson(content);
   const items=Array.isArray(parsed?.items)?parsed.items.map((x:any)=>typeof x==="string"?x:String(x?.text||"")).filter(Boolean).slice(0,count):[];
-  return {items,model,source:"cheapestinference"};
+  if(!items.length)throw new Error("Cheaper Inference respondió, pero no devolvió el JSON de publicaciones esperado.");
+  return {items,model,source:"cheaperinference"};
 }
 
 async function openAI(prompt:string,count:number){
@@ -88,22 +93,26 @@ Reglas obligatorias:
 
 Devuelve SOLO JSON válido: {"items":["texto 1","texto 2"]}.`;
 
-  try{
-    let generated=await cheapestInference(prompt,count);
-    if(!generated||!generated.items.length)generated=await openAI(prompt,count);
-    const sourceItems=generated?.items?.length?generated.items:fallback.slice(0,count);
-    const compliant:string[]=[];
-    for(const text of sourceItems){
-      const value=String(text||"").trim();if(!value)continue;
-      const first=localComplianceReview(value);
-      if(first.status==="pass"){compliant.push(value);continue}
-      const cleaned=sanitizeEngagementBait(value);if(localComplianceReview(cleaned).status==="pass"&&cleaned.trim())compliant.push(cleaned.trim());
-    }
-    const safeFallback=fallback.filter(x=>localComplianceReview(x).status==="pass");
-    while(compliant.length<count&&safeFallback.length){const candidate=safeFallback[compliant.length%safeFallback.length];if(!compliant.includes(candidate))compliant.push(candidate);else break}
-    return NextResponse.json({source:generated?.source||"fallback",model:generated?.model||"local",items:compliant.slice(0,count),complianceChecked:true,patternsUsed:patterns.length});
-  }catch(error:any){
-    const safe=fallback.filter(x=>localComplianceReview(x).status==="pass").slice(0,count);
-    return NextResponse.json({source:"fallback",model:"local",items:safe,warning:error?.message||"Falló el proveedor principal.",complianceChecked:true});
+  const providerErrors:string[]=[];
+  let generated:any=null;
+  try{generated=await cheaperInference(prompt,count)}catch(error:any){providerErrors.push(error?.message||"Falló Cheaper Inference.")}
+  if(!generated?.items?.length){
+    try{generated=await openAI(prompt,count)}catch(error:any){providerErrors.push(error?.message||"Falló OpenAI.")}
   }
+  if(!generated?.items?.length){
+    const allowLocal=String(process.env.ALLOW_LOCAL_GENERATION_FALLBACK||"").toLowerCase()==="true";
+    if(!allowLocal){
+      return NextResponse.json({error:"No hay un proveedor de IA disponible para generar esta publicación.",details:providerErrors.slice(0,3),source:"none"},{status:502});
+    }
+    generated={items:fallback.slice(0,count),model:"local",source:"fallback"};
+  }
+  const compliant:string[]=[];
+  for(const text of generated.items){
+    const value=String(text||"").trim();if(!value)continue;
+    const first=localComplianceReview(value);
+    if(first.status==="pass"){compliant.push(value);continue}
+    const cleaned=sanitizeEngagementBait(value);if(localComplianceReview(cleaned).status==="pass"&&cleaned.trim())compliant.push(cleaned.trim());
+  }
+  if(!compliant.length){return NextResponse.json({error:"La IA respondió, pero todos los textos fueron bloqueados por Compliance.",source:generated.source,model:generated.model},{status:422})}
+  return NextResponse.json({source:generated.source,model:generated.model,items:compliant.slice(0,count),complianceChecked:true,patternsUsed:patterns.length,warning:providerErrors.length?providerErrors.join(" · "):undefined});
 }

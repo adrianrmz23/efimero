@@ -1,3 +1,11 @@
+## V1.6.2 · Smart Queue + AI Fix
+
+- Fecha/hora vacías en Programador individual: Efímero consulta la cola real de Meta y agenda 30 min después del último post pendiente.
+- Inicio vacío en Bulk imágenes: continúa automáticamente `intervalo` minutos después del último post de Meta.
+- La cola se consulta de nuevo justo antes de programar.
+- Corregida la integración de **Cheaper Inference** (`api.cheaperinference.com`) y eliminado el fallback local silencioso.
+- Consulta `V1_6_2_SMART_QUEUE_AI.md`.
+
 ## V1.6 · Programador masivo de imágenes
 
 Se añadió **Principal → Bulk imágenes** para subir lotes visuales y repartirlos automáticamente por intervalos y días. Consulta `V1_6_BULK_VISUAL.md`.

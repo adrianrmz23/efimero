@@ -3,7 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarClock, Check, CheckCircle2, ChevronDown, Clock3, Image as ImageIcon, Loader2, RefreshCw, RotateCcw, Trash2, Upload, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { META_MIN_SCHEDULE_MINUTES, localDateString, localTimeString } from "@/lib/scheduling";
+import { META_MIN_SCHEDULE_MINUTES, fetchMetaQueueSuggestion, localDateString, localTimeString, type MetaQueueSuggestion } from "@/lib/scheduling";
 import { persistWorkingPage, resolveWorkingPageId, WORKING_PAGE_EVENT } from "@/lib/workingPage";
 
 type Page={id:string;name:string};
@@ -78,10 +78,12 @@ export default function BulkImageScheduler({onAddMany}:Props){
   const [items,setItems]=useState<BulkImageItem[]>([]);const [interval,setInterval]=useState(30);
   const [windowStart,setWindowStart]=useState("08:00");const [windowEnd,setWindowEnd]=useState("23:30");
   const [customStart,setCustomStart]=useState("");const [caption,setCaption]=useState("");
+  const [queueSuggestion,setQueueSuggestion]=useState<MetaQueueSuggestion|null>(null);const [queueBusy,setQueueBusy]=useState(false);const [queueError,setQueueError]=useState("");
   const [busy,setBusy]=useState(false);const [reading,setReading]=useState(false);const [notice,setNotice]=useState("");const [error,setError]=useState("");
   const inputRef=useRef<HTMLInputElement>(null);
   const page=pages.find(p=>p.id===pageId);const timezone=useMemo(()=>Intl.DateTimeFormat().resolvedOptions().timeZone||"Hora local",[]);
-  const slots=useMemo(()=>buildSlots(items.length,Math.max(5,interval),windowStart,windowEnd,customStart),[items.length,interval,windowStart,windowEnd,customStart]);
+  const effectiveStart=customStart||queueSuggestion?.value||"";
+  const slots=useMemo(()=>buildSlots(items.length,Math.max(5,interval),windowStart,windowEnd,effectiveStart),[items.length,interval,windowStart,windowEnd,effectiveStart]);
   const scheduledCount=items.filter(x=>x.status==="scheduled").length;const failedCount=items.filter(x=>x.status==="error").length;
   const dates=useMemo(()=>Array.from(new Set(slots.map(x=>x.date))),[slots]);
   const invalidWindow=minutesFromTime(windowEnd)<=minutesFromTime(windowStart);
@@ -92,6 +94,15 @@ export default function BulkImageScheduler({onAddMany}:Props){
     fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{const list=d.pages||[];setPages(list);if(list.length)setPageId(resolveWorkingPageId(list,d.activePageId))}).catch(()=>{});
     return()=>window.removeEventListener(WORKING_PAGE_EVENT,onWorkingPage);
   },[]);
+
+  async function refreshQueueSuggestion(targetPageId=pageId,targetInterval=interval){
+    if(!targetPageId||customStart){setQueueSuggestion(null);setQueueError("");return null}
+    setQueueBusy(true);setQueueError("");
+    try{const suggestion=await fetchMetaQueueSuggestion(targetPageId,Math.max(5,targetInterval));setQueueSuggestion(suggestion);return suggestion}
+    catch(e:any){setQueueSuggestion(null);setQueueError(e?.message||"No se pudo consultar la cola de Meta.");return null}
+    finally{setQueueBusy(false)}
+  }
+  useEffect(()=>{if(pageId&&!customStart)void refreshQueueSuggestion(pageId,interval)},[pageId,interval,customStart]);
 
   useEffect(()=>{setItems(current=>current.map((item,index)=>item.status==="scheduled"?item:{...item,date:slots[index]?.date||item.date,time:slots[index]?.time||item.time}))},[slots.map(x=>`${x.date}-${x.time}`).join("|")]);
 
@@ -125,7 +136,12 @@ export default function BulkImageScheduler({onAddMany}:Props){
   async function scheduleAll(retryOnly=false){
     if(!pageId){setError("Selecciona una página de Facebook.");return}
     if(invalidWindow){setError("La hora de fin debe ser posterior a la hora de inicio.");return}
-    const freshSlots=buildSlots(items.length,Math.max(5,interval),windowStart,windowEnd,customStart,new Date());
+    let freshStart=customStart;
+    if(!freshStart){
+      try{const suggestion=await fetchMetaQueueSuggestion(pageId,Math.max(5,interval));setQueueSuggestion(suggestion);freshStart=suggestion.value}
+      catch(err:any){setError(err?.message||"No fue posible consultar la cola de Meta antes de programar.");return}
+    }
+    const freshSlots=buildSlots(items.length,Math.max(5,interval),windowStart,windowEnd,freshStart,new Date());
     const planned=items.map((item,index)=>item.status==="scheduled"?item:{...item,date:freshSlots[index]?.date||item.date,time:freshSlots[index]?.time||item.time});
     setItems(planned);
     const targets=planned.filter(x=>retryOnly?x.status==="error":x.status==="ready"||x.status==="error");
@@ -175,12 +191,13 @@ export default function BulkImageScheduler({onAddMany}:Props){
       <aside className="bulkControls">
         <div className="bulkControlTitle"><ImageIcon size={21}/><div><strong>Distribución automática</strong><span>Configura una vez y revisa la cola antes de confirmar.</span></div></div>
         <label><span>Página</span><select value={pageId} onChange={e=>{setPageId(e.target.value);void persistWorkingPage(e.target.value)}}><option value="">Selecciona…</option>{pages.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select></label>
-        <div className="bulkFieldGrid"><label><span>Separación en minutos</span><input type="number" min={5} max={720} step={5} value={interval} onChange={e=>setInterval(Math.max(5,Number(e.target.value)||5))}/><small className="fieldHint">Puedes usar 30, 45, 60 o cualquier intervalo.</small></label><label><span>Inicio opcional</span><input type="datetime-local" value={customStart} onChange={e=>setCustomStart(e.target.value)}/></label></div><div className="bulkIntervalPresets">{[30,45,60,90].map(value=><button key={value} className={interval===value?"active":""} onClick={()=>setInterval(value)}>{value} min</button>)}</div>
+        <div className="bulkFieldGrid"><label><span>Separación en minutos</span><input type="number" min={5} max={720} step={5} value={interval} onChange={e=>setInterval(Math.max(5,Number(e.target.value)||5))}/><small className="fieldHint">Puedes usar 30, 45, 60 o cualquier intervalo.</small></label><label><span>Inicio opcional</span><input type="datetime-local" value={customStart} onChange={e=>setCustomStart(e.target.value)}/><small className="fieldHint">Vacío = continuar después de la última publicación de Meta.</small></label></div><div className="bulkIntervalPresets">{[30,45,60,90].map(value=><button key={value} className={interval===value?"active":""} onClick={()=>setInterval(value)}>{value} min</button>)}</div>
         <div className="bulkFieldGrid"><label><span>Ventana diaria desde</span><input type="time" value={windowStart} onChange={e=>setWindowStart(e.target.value)}/></label><label><span>Hasta</span><input type="time" value={windowEnd} onChange={e=>setWindowEnd(e.target.value)}/></label></div>
         {invalidWindow&&<div className="bulkWarning"><AlertTriangle size={15}/> La ventana diaria no es válida.</div>}
         <label><span>Texto común opcional</span><textarea value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Déjalo vacío para publicar solamente las imágenes."/></label>
+        {!customStart&&<div className={queueError?"bulkWarning":"bulkInfo"}>{queueError?<AlertTriangle size={15}/>:queueBusy?<Loader2 className="spin" size={15}/>:<Check size={15}/>}<span>{queueBusy?"Consultando la cola real de Meta…":queueError|| (queueSuggestion?`${queueSuggestion.count?`Continuará ${interval} min después de la última publicación de Meta`:`Meta no tiene cola pendiente; iniciaremos desde el siguiente horario válido`}. Primera sugerencia: ${prettyDateTime(queueSuggestion.date,queueSuggestion.time)}.`:"Efímero consultará Meta antes de programar para continuar al final de la cola.")}</span></div>}
         {!!items.length&&slots[0]&&<div className="bulkPlan"><div><small>PRIMERA</small><strong>{prettyDateTime(slots[0].date,slots[0].time)}</strong></div><ChevronDown size={16}/><div><small>ÚLTIMA</small><strong>{prettyDateTime(slots[slots.length-1].date,slots[slots.length-1].time)}</strong></div></div>}
-        <div className="bulkInfo"><Check size={15}/><span>Si el día se termina, la cola continúa automáticamente al siguiente día desde {windowStart}. Nunca usa una hora pasada.</span></div>
+        <div className="bulkInfo"><Check size={15}/><span>Si el día se termina, la cola continúa automáticamente al siguiente día desde {windowStart}. Nunca usa una hora pasada y vuelve a consultar Meta justo antes de confirmar.</span></div>
         <button className="uiBtn uiBtnPrimary wide bulkScheduleButton" disabled={busy||reading||!items.length||invalidWindow} onClick={()=>void scheduleAll(false)}>{busy?<Loader2 className="spin" size={17}/>:<CalendarClock size={17}/>} {busy?"Programando lote…":`Programar ${items.filter(x=>x.status!=="scheduled").length||items.length} imágenes`}</button>
         {failedCount>0&&<button className="uiBtn uiBtnSecondary wide" disabled={busy} onClick={()=>{resetFailures();setTimeout(()=>void scheduleAll(true),0)}}><RefreshCw size={16}/> Reintentar fallidas</button>}
         {scheduledCount===items.length&&items.length>0&&<button className="uiBtn uiBtnSecondary wide" disabled={busy} onClick={clearQueue}><RotateCcw size={16}/> Preparar otro lote</button>}

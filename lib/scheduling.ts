@@ -37,3 +37,36 @@ export function minTimeForDate(date:string,minMinutes=META_MIN_SCHEDULE_MINUTES,
 export function minuteOfDay(date=new Date()){
   return date.getHours()*60+date.getMinutes();
 }
+
+export type MetaQueueSuggestion = {
+  count:number;
+  lastScheduledPublishTime:number|null;
+  suggestedNextPublishTime:number;
+  date:string;
+  time:string;
+  value:string;
+};
+
+/**
+ * Consulta la cola REAL de Meta y propone el siguiente hueco.
+ * Si ya hay posts programados, usa el último + intervalMinutes.
+ * Si la cola está vacía, usa el siguiente horario válido desde ahora.
+ */
+export async function fetchMetaQueueSuggestion(pageId:string,intervalMinutes=30):Promise<MetaQueueSuggestion>{
+  if(!pageId)throw new Error("Falta la página activa.");
+  const interval=Math.min(720,Math.max(5,Math.round(Number(intervalMinutes)||30)));
+  const response=await fetch(`/api/meta/scheduled?pageId=${encodeURIComponent(pageId)}&intervalMinutes=${interval}`,{cache:"no-store"});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data?.error||"No fue posible consultar la cola de Meta.");
+  const epoch=Number(data?.suggestedNextPublishTime||0);
+  const suggested=epoch>0?new Date(epoch*1000):new Date(Date.now()+META_MIN_SCHEDULE_MINUTES*60_000);
+  if(Number.isNaN(suggested.getTime()))throw new Error("Meta devolvió un horario inválido.");
+  const date=localDateString(suggested);
+  const time=localTimeString(suggested);
+  return {
+    count:Number(data?.count||0),
+    lastScheduledPublishTime:Number(data?.lastScheduledPublishTime||0)||null,
+    suggestedNextPublishTime:Math.floor(suggested.getTime()/1000),
+    date,time,value:`${date}T${time}`,
+  };
+}

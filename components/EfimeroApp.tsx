@@ -563,7 +563,7 @@ export default function EfimeroApp(){
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>V1.6.1 · Safe Queue</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>V1.6.2 · Smart Queue + AI</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>

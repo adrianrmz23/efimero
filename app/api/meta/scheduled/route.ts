@@ -51,6 +51,12 @@ export async function GET(request:NextRequest){
     if(!pageId)return NextResponse.json({error:"Falta pageId."},{status:400});
     const token=await resolvePageToken(pageId);
     const posts=await listAllScheduled(pageId,token);
+    const intervalMinutes=Math.min(720,Math.max(5,Math.round(Number(request.nextUrl.searchParams.get("intervalMinutes")||30)||30)));
+    const futureEpochs=posts.map(post=>Number(post.scheduled_publish_time||0)).filter(value=>Number.isFinite(value)&&value>0);
+    const lastScheduledPublishTime=futureEpochs.length?Math.max(...futureEpochs):null;
+    const minFutureEpoch=Math.ceil((Date.now()+10*60_000)/1000);
+    const rawSuggested=Math.max(minFutureEpoch,lastScheduledPublishTime?lastScheduledPublishTime+intervalMinutes*60:0);
+    const suggestedNextPublishTime=Math.ceil(rawSuggested/(5*60))*(5*60);
 
     const admin=getSupabaseAdmin();
     const ids=posts.map(x=>String(x.id)).filter(Boolean);
@@ -65,6 +71,9 @@ export async function GET(request:NextRequest){
     const byMeta=new Map(local.map((x:any)=>[String(x.meta_post_id),x]));
     return NextResponse.json({
       ok:true,pageId,count:posts.length,
+      lastScheduledPublishTime,
+      suggestedNextPublishTime,
+      intervalMinutes,
       posts:posts.map(post=>({
         id:String(post.id),
         message:String(post.message||""),
