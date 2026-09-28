@@ -24,10 +24,22 @@ const styles=[
   ["Reto ligero","Pequeño acertijo o reto breve; sin pedir compartir ni etiquetar."],
 ] as const;
 
+const contentFormats=[
+  ["Conversacional breve","Copy corto pensado para interacción natural."],
+  ["Frase breve de fe","Una sola idea de fe, contundente y fácil de leer."],
+  ["Versículo + reflexión","Referencia bíblica breve seguida de una aplicación cotidiana."],
+  ["Oración","Oración cálida y desarrollada, útil para mañana, noche o una situación concreta."],
+  ["Reflexión de fe","Texto más profundo de acompañamiento, esperanza y confianza."],
+  ["Mensaje de esperanza","Mensaje medio, directo y reconfortante para una situación difícil."],
+  ["Mensaje devocional en segunda persona","Texto cercano tipo “Dios te recuerda…”, sin presentarlo como revelación privada literal."],
+  ["Salmo + acompañamiento","Referencia a un Salmo y reflexión de acompañamiento sin copiar citas extensas."],
+] as const;
+
 export default function QuickPostStudio({categories,library,editorialProfile,onSaveItems,onSchedule}:Props){
   const enabled=categories.filter(x=>x.enabled!==false);
   const [category,setCategory]=useState(enabled.find(x=>x.name==="Preguntas")?.name||enabled[0]?.name||"General");
   const [style,setStyle]=useState("Mixto");
+  const [contentFormat,setContentFormat]=useState("Conversacional breve");
   const [objective,setObjective]=useState("Texto corto que provoque una respuesta mental o conversación natural.");
   const [text,setText]=useState("");
   const [model,setModel]=useState("");
@@ -52,7 +64,7 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
   async function generate(){
     setBusy(true);setError("");setNotice("");setSaved("");
     try{
-      const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category,count:1,examples,profile:editorialProfile||null,mode:"quick",interactionStyle:style,objective,recentTexts:recentGenerated})});
+      const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category,count:1,examples,profile:editorialProfile||null,mode:"quick",interactionStyle:style,contentFormat,objective,recentTexts:recentGenerated})});
       const d=await r.json();if(!r.ok){const detail=Array.isArray(d.details)&&d.details.length?` ${d.details.join(" · ")}`:"";throw new Error(`${d.error||"No fue posible generar el texto."}${detail}`)}
       const value=String(d.items?.[0]||"").trim();if(!value)throw new Error("El modelo no devolvió una publicación utilizable.");
       setText(value);setRecentGenerated(prev=>[...prev,value].slice(-10));setModel(`${d.model||"IA"}${d.source?` · ${d.source}`:""}`);if(d.warning)setNotice(`Generado con IA secundaria. ${d.warning}`);
@@ -83,7 +95,8 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
     <div className="quickStudioGrid">
       <div className="quickControls">
         <label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}>{enabled.map(c=><option key={c.name}>{c.name}</option>)}</select></label>
-        <label><span>Tipo de interacción</span><select value={style} onChange={e=>setStyle(e.target.value)}>{styles.map(([name])=><option key={name}>{name}</option>)}</select><small>{styles.find(x=>x[0]===style)?.[1]}</small></label>
+        <label><span>Formato del copy</span><select value={contentFormat} onChange={e=>setContentFormat(e.target.value)}>{contentFormats.map(([name])=><option key={name}>{name}</option>)}</select><small>{contentFormats.find(x=>x[0]===contentFormat)?.[1]}</small></label>
+        <label><span>Tipo de interacción</span><select value={style} onChange={e=>setStyle(e.target.value)}>{styles.map(([name])=><option key={name}>{name}</option>)}</select><small>{contentFormat==="Conversacional breve"?styles.find(x=>x[0]===style)?.[1]:"Se usa como matiz secundario; el formato elegido arriba define la estructura principal."}</small></label>
         <label><span>Qué quieres provocar</span><textarea value={objective} onChange={e=>setObjective(e.target.value)} rows={3}/></label>
         <label><span>Página para publicar</span><select value={pageId} onChange={e=>{setPageId(e.target.value);void persistWorkingPage(e.target.value)}}><option value="">Selecciona…</option>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><small>Sincronizada con la página activa global.</small></label>
         <button className="quickGenerate" onClick={generate} disabled={busy}>{busy?<Loader2 className="spin" size={19}/>:text?<RefreshCw size={19}/>:<Sparkles size={19}/>} {busy?"Generando…":text?"Generar otra":"Generar publicación"}</button>

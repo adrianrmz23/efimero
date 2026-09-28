@@ -37,6 +37,28 @@ function questionThemeFor(recentTexts:string[]){
   return usable[recentTexts.length%usable.length]||QUESTION_THEMES[0];
 }
 
+
+function formatRules(format:string){
+  switch(format){
+    case "Frase breve de fe":
+      return `\nFORMATO RELIGIOSO: FRASE BREVE DE FE\n- 8 a 24 palabras.\n- Una sola idea, directa, memorable y cálida.\n- Puede mencionar a Dios, fe, oración, esperanza o fortaleza.\n- Evita clichés calcados y evita pedir interacción.`;
+    case "Versículo + reflexión":
+      return `\nFORMATO RELIGIOSO: VERSÍCULO + REFLEXIÓN\n- 35 a 90 palabras.\n- Abre con una referencia bíblica real y breve (por ejemplo: “Isaías 41:13”).\n- Prefiere parafrasear el sentido del pasaje; no inventes versículos ni copies citas extensas.\n- Continúa con una reflexión concreta aplicada a una dificultad cotidiana.\n- Cierra con esperanza, no con una llamada a comentar o compartir.`;
+    case "Oración":
+      return `\nFORMATO RELIGIOSO: ORACIÓN\n- 180 a 320 palabras.\n- Escribe como una oración dirigida a Dios, cálida, natural y coherente.\n- Puede adaptarse a mañana, noche, familia, trabajo, gratitud, preocupación o descanso según el objetivo.\n- Incluye gratitud, petición, confianza y un cierre breve.\n- Evita repeticiones mecánicas y no pidas interacción.`;
+    case "Reflexión de fe":
+      return `\nFORMATO RELIGIOSO: REFLEXIÓN DE FE\n- 100 a 220 palabras.\n- Apertura emocional fuerte pero no clickbait.\n- Desarrolla una dificultad humana concreta, acompáñala con fe y termina con esperanza.\n- Puede incluir una referencia bíblica breve si encaja.\n- No copies frases virales conocidas.`;
+    case "Mensaje de esperanza":
+      return `\nFORMATO RELIGIOSO: MENSAJE DE ESPERANZA\n- 55 a 120 palabras.\n- Segunda persona, tono cercano y reconfortante.\n- Parte de una dificultad o incertidumbre y termina con una idea clara de esperanza y continuidad.\n- Evita exageraciones y promesas garantizadas.`;
+    case "Mensaje devocional en segunda persona":
+      return `\nFORMATO RELIGIOSO: MENSAJE DEVOCIONAL EN SEGUNDA PERSONA\n- 70 a 150 palabras.\n- Tono íntimo y espiritual, como un recordatorio devocional dirigido al lector.\n- Puedes usar aperturas como “Hoy recuerda esto:” o “Dios puede recordarte hoy que…”.\n- NO afirmes que recibiste una revelación privada ni asegures que Dios dijo literalmente una frase específica.\n- Habla de paciencia, confianza, proceso, propósito, fortaleza o espera con lenguaje original.`;
+    case "Salmo + acompañamiento":
+      return `\nFORMATO RELIGIOSO: SALMO + ACOMPAÑAMIENTO\n- 70 a 150 palabras.\n- Menciona una referencia real de Salmos y explica su sentido en lenguaje cotidiano.\n- Prefiere paráfrasis; no reproduzcas una traducción bíblica extensa.\n- Conecta el Salmo con cansancio, incertidumbre, gratitud, protección o esperanza.\n- Cierre sobrio y reconfortante.`;
+    default:
+      return "";
+  }
+}
+
 function extractJson(text:string){
   const clean=String(text||"").replace(/```json/gi,"").replace(/```/g,"").trim();
   const start=clean.indexOf("{");const end=clean.lastIndexOf("}");
@@ -55,7 +77,7 @@ async function getLearningPatterns(category:string){
   }catch{return [] as any[]}
 }
 
-async function cheaperInference(prompt:string,count:number){
+async function cheaperInference(prompt:string,count:number,maxTokensHint=450){
   const apiKey=process.env.CHEAPERINFERENCE_API_KEY||process.env.CHEAPESTINFERENCE_API_KEY||process.env.CHEAPINFERENCE_API_KEY;
   if(!apiKey)return null;
   const model=process.env.CHEAPERINFERENCE_MODEL||process.env.CHEAPESTINFERENCE_MODEL||process.env.CHEAPINFERENCE_MODEL||"gpt-5.6-terra";
@@ -66,7 +88,7 @@ async function cheaperInference(prompt:string,count:number){
   const response=await fetch(`${base}/chat/completions`,{
     method:"POST",
     headers:{Authorization:`Bearer ${apiKey}`,"Content-Type":"application/json","X-CI-Concise":"1"},
-    body:JSON.stringify({model,messages:[{role:"system",content:"Eres un redactor senior de Facebook especializado en copies breves, naturales y memorables. Devuelves JSON válido sin Markdown."},{role:"user",content:prompt}],max_tokens:Math.max(450,count*160)}),
+    body:JSON.stringify({model,messages:[{role:"system",content:"Eres un redactor senior de Facebook. Escribes contenido natural, original y adecuado al formato solicitado. Devuelves JSON válido sin Markdown."},{role:"user",content:prompt}],max_tokens:Math.max(maxTokensHint,count*160)}),
     cache:"no-store",
   });
   if(!response.ok){const detail=await response.text();throw new Error(`Cheaper Inference respondió ${response.status}: ${detail.slice(0,260)}`)}
@@ -96,6 +118,7 @@ export async function POST(request: NextRequest) {
   const profile = body.profile && typeof body.profile === "object" ? body.profile : null;
   const mode=String(body.mode||"calendar");
   const interactionStyle=String(body.interactionStyle||"Mixto");
+  const contentFormat=String(body.contentFormat||"Conversacional breve");
   const objective=String(body.objective||"Generar identificación y conversación natural.");
   const recentTexts=Array.isArray(body.recentTexts)?body.recentTexts.slice(-10).map(String).filter(Boolean):[];
   const questionTheme=category.toLowerCase().includes("pregunta")?questionThemeFor(recentTexts):"";
@@ -107,7 +130,9 @@ export async function POST(request: NextRequest) {
   const recentContext=recentTexts.length?`\nÚLTIMAS SALIDAS DE ESTA SESIÓN (NO repitas tema, objeto, pregunta ni estructura):\n${recentTexts.map((x:string)=>`- ${x}`).join("\n")}`:"";
   const themeBatch=category.toLowerCase().includes("pregunta")?QUESTION_THEMES.slice(0,Math.min(Math.max(count,6),QUESTION_THEMES.length)):[];
   const questionDiversity=questionTheme?`\nREGLA ESPECIAL PARA PREGUNTAS:\n- Tema OBLIGATORIO de esta generación: ${questionTheme}.\n- No uses canciones, música, artistas, playlists o conciertos salvo que el tema obligatorio sea música y entretenimiento.\n- Formula una pregunta concreta, fácil de entender y diferente a las últimas salidas.\n- Alterna entre recuerdo, preferencia, experiencia, dilema, humor, hábito o elección rápida según el tema.`:themeBatch.length?`\nREGLA ESPECIAL PARA PREGUNTAS EN LOTE:\n- Reparte las salidas entre temas DISTINTOS. Usa esta lista como rotación: ${themeBatch.join(" | ")}.\n- No repitas el mismo asunto en dos publicaciones consecutivas.\n- Música/entretenimiento puede aparecer como máximo en una pieza del lote.\n- Alterna tipos de pregunta: recuerdo, preferencia, experiencia, dilema, humor, hábito y elección rápida.`:"";
-  const quickRules=mode==="quick"?`\nMODO RÁPIDO DE INTERACCIÓN NATURAL:\n- Tipo solicitado: ${interactionStyle}.\n- Objetivo: ${objective}.\n- Prioriza 8 a 28 palabras. Una sola idea por publicación.\n- Debe entenderse en menos de 2 segundos.\n- Usa preguntas personales concretas, humor identificable, nostalgia, dilemas o retos ligeros cuando corresponda.\n- Evita frases motivacionales genéricas y explicaciones largas.\n- Una pregunta natural es válida; NO ordenes interactuar.${questionDiversity}${recentContext}`:`\nPrioriza copies breves, concretos y variados; evita relleno.${questionDiversity}`;
+  const religiousRules=formatRules(contentFormat);
+  const isLongReligious=["Oración","Reflexión de fe","Mensaje de esperanza","Mensaje devocional en segunda persona","Salmo + acompañamiento","Versículo + reflexión"].includes(contentFormat);
+  const quickRules=mode==="quick"?religiousRules?`\nMODO CREAR · FORMATO ESPECÍFICO:\n- Formato solicitado: ${contentFormat}.\n- Matiz secundario: ${interactionStyle}.\n- Objetivo del usuario: ${objective}.${religiousRules}${recentContext}`:`\nMODO RÁPIDO DE INTERACCIÓN NATURAL:\n- Tipo solicitado: ${interactionStyle}.\n- Objetivo: ${objective}.\n- Prioriza 8 a 28 palabras. Una sola idea por publicación.\n- Debe entenderse en menos de 2 segundos.\n- Usa preguntas personales concretas, humor identificable, nostalgia, dilemas o retos ligeros cuando corresponda.\n- Evita frases motivacionales genéricas y explicaciones largas.\n- Una pregunta natural es válida; NO ordenes interactuar.${questionDiversity}${recentContext}`:`\nPrioriza copies breves, concretos y variados; evita relleno.${questionDiversity}`;
   const prompt = `Crea ${count} publicaciones NUEVAS en español para Facebook, categoría "${category}".${quickRules}${profileContext}${patternContext}
 
 Ejemplos propios útiles (solo para captar tono; no copies):
@@ -125,7 +150,8 @@ Devuelve SOLO JSON válido: {"items":["texto 1","texto 2"]}.`;
 
   const providerErrors:string[]=[];
   let generated:any=null;
-  try{generated=await cheaperInference(prompt,count)}catch(error:any){providerErrors.push(error?.message||"Falló Cheaper Inference.")}
+  const maxTokensHint=isLongReligious?Math.max(900,count*520):450;
+  try{generated=await cheaperInference(prompt,count,maxTokensHint)}catch(error:any){providerErrors.push(error?.message||"Falló Cheaper Inference.")}
   if(!generated?.items?.length){
     try{generated=await openAI(prompt,count)}catch(error:any){providerErrors.push(error?.message||"Falló OpenAI.")}
   }
