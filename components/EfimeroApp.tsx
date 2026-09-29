@@ -33,6 +33,7 @@ import InspirationRadar from "@/components/InspirationRadar";
 import LearningAgent from "@/components/LearningAgent";
 import ControlCenter from "@/components/ControlCenter";
 import QuickPostStudio from "@/components/QuickPostStudio";
+import PrayerReelGenerator from "@/components/PrayerReelGenerator";
 import SinglePostScheduler from "@/components/SinglePostScheduler";
 import BulkImageScheduler from "@/components/BulkImageScheduler";
 import MetaScheduledQueue from "@/components/MetaScheduledQueue";
@@ -563,7 +564,7 @@ export default function EfimeroApp(){
       <div className="sidebarFooter">
         <div className={`sidebarSync ${syncState}`}>
           <span className="liveDot"/>
-          <div className="sidebarSyncText"><strong>V1.6.2 · Smart Queue + AI</strong><span>{syncLabel}</span></div>
+          <div className="sidebarSyncText"><strong>V1.6.6 · Prayer Reels</strong><span>{syncLabel}</span></div>
         </div>
         <LogoutButton/>
       </div>
@@ -583,6 +584,7 @@ export default function EfimeroApp(){
       </section>
       {tab==="creator"&&<>
         <QuickPostStudio categories={categories} library={library} editorialProfile={useEditorialProfile?editorialProfile:null} onSaveItems={saveFactoryItems} onSchedule={({text,category})=>{setPublisherPrefill({text,category,nonce:Date.now()});setTab("publisher")}}/>
+        <PrayerReelGenerator/>
         <details className="massBuilder"><summary><span><WandSparkles size={18}/><b>Generación masiva de calendario</b><small>Opcional · crea muchos borradores para varios días</small></span><ChevronRight size={18}/></summary>
         <section className="builderCard">
           <SectionHeader step="01" title="Tipo de publicaciones" note="Elige qué tipo de piezas entran en el calendario."/>
