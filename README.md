@@ -336,3 +336,7 @@ Rediseño completo de UI con paleta petróleo/turquesa/azul, mejor jerarquía ti
 ## V1.6.1 · Safe Queue
 
 Se añadió `Principal → Cola Meta` para consultar directamente las publicaciones programadas que Facebook aún conserva. La cancelación individual o masiva elimina primero el post programado en Meta y después limpia Supabase/Efímero. El Calendario ya no permite borrar silenciosamente una pieza que ya está programada en Facebook.
+
+## V1.6.7 · Gestor de Reels
+
+Nueva sección **Gestor de Reels** para revisar Reels confirmados de la página activa, filtrar por periodo, exportar CSV y eliminar varios en lote. Efímero valida cada elemento nuevamente como Reel antes de borrarlo y deja aparte los videos ambiguos para reducir el riesgo de eliminar videos normales.
