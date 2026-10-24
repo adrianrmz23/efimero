@@ -25,6 +25,7 @@ import WeeklyReport from "@/components/WeeklyReport";
 import InspirationRadar from "@/components/InspirationRadar";
 import LearningAgent from "@/components/LearningAgent";
 import AdsManager from "@/components/AdsManager";
+import ReelStudio from "@/components/ReelStudio";
 import ControlCenter from "@/components/ControlCenter";
 import SystemHealth from "@/components/SystemHealth";
 import QuickPostStudio from "@/components/QuickPostStudio";
@@ -49,7 +50,7 @@ import LogoutButton from "@/components/auth/LogoutButton";
 import { useConfirm, useToast } from "@/components/ui/DialogProvider";
 import { PagesProvider, usePages } from "@/lib/pagesContext";
 
-type Tab = "home" | "health" | "niches" | "creativeStudio" | "creator" | "publisher" | "bulkTexts" | "bulkImages" | "metaQueue" | "reels" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "executive" | "meta" | "analytics" | "queue" | "compliance" | "scheduler" | "loop" | "dataset" | "weekly" | "radar" | "learningAgent" | "ads" | "control";
+type Tab = "home" | "health" | "niches" | "creativeStudio" | "creator" | "publisher" | "bulkTexts" | "bulkImages" | "metaQueue" | "reels" | "calendar" | "library" | "categories" | "profile" | "factory" | "learning" | "experiments" | "executive" | "meta" | "analytics" | "queue" | "compliance" | "scheduler" | "loop" | "dataset" | "weekly" | "radar" | "learningAgent" | "ads" | "reelStudio" | "control";
 type ScheduleItem = { id:string; date:string; time:string; category:string; text:string; format:"Texto"|"Imagen"; status:"Borrador"|"Revisión"|"Aprobado"|"Programado"|"Publicado"|"Error"; similarity?:number; imageDataUrl?:string; imageUrl?:string; pageId?:string; pageName?:string; metaPostId?:string; compliance?:any; publishError?:string; autopilot?:boolean };
 type CalendarSnapshot = { id:string; createdAt:string; days:number; posts:number; startDate:string; pageId?:string };
 type SyncState = "local"|"loading"|"synced"|"error";
@@ -65,7 +66,7 @@ function EfimeroShell(){
   const [publisherPrefill,setPublisherPrefill]=useState<{text:string;category:string;nonce:number}|null>(null);
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
-    const allowed:Tab[]=["home","health","niches","creativeStudio","creator","publisher","bulkTexts","bulkImages","metaQueue","reels","calendar","library","categories","profile","factory","learning","experiments","executive","meta","analytics","queue","compliance","scheduler","loop","dataset","weekly","radar","learningAgent","ads","control"];
+    const allowed:Tab[]=["home","health","niches","creativeStudio","creator","publisher","bulkTexts","bulkImages","metaQueue","reels","calendar","library","categories","profile","factory","learning","experiments","executive","meta","analytics","queue","compliance","scheduler","loop","dataset","weekly","radar","learningAgent","ads","reelStudio","control"];
     if(section&&allowed.includes(section))setTab(section);
   },[]);
   // Refleja la sección en la URL para poder recargar o compartir el enlace.
@@ -395,6 +396,7 @@ function EfimeroShell(){
 
       {tab==="health"&&<SystemHealth schedule={schedule} library={library}/>}
       {tab==="ads"&&<AdsManager/>}
+      {tab==="reelStudio"&&<ReelStudio/>}
       {tab==="control"&&<ControlCenter onNavigate={(next)=>setTab(next as Tab)}/>}
 
     </main>

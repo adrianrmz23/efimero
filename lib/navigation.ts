@@ -10,7 +10,7 @@ export const navGroups:NavGroup[] = [
   { label:"Crear", sections:[
     { id:"studio", label:"Estudio", icon:Sparkles, tabs:[{tab:"creator",label:"Post rápido"},{tab:"factory",label:"Fábrica de textos"},{tab:"experiments",label:"Experimentos"},{tab:"creativeStudio",label:"Estudio creativo"}] },
     { id:"inspiration", label:"Inspiración", icon:Radar, tabs:[{tab:"radar",label:"Radar"},{tab:"niches",label:"Laboratorio de nichos"},{tab:"learningAgent",label:"Learning Agent"}] },
-    { id:"reels", label:"Reels", icon:Film, tabs:[{tab:"reels",label:"Gestor de Reels"}] },
+    { id:"reels", label:"Reels", icon:Film, tabs:[{tab:"reelStudio",label:"Estudio de reels"},{tab:"reels",label:"Gestor de Reels"}] },
   ]},
   { label:"Publicar", sections:[
     { id:"calendar", label:"Calendario", icon:CalendarDays, tabs:[{tab:"calendar",label:"Calendario"},{tab:"queue",label:"Bandeja de revisión"},{tab:"metaQueue",label:"Cola de Meta"}] },
