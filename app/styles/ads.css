@@ -23,7 +23,8 @@
 .adsSummary b{color:var(--ui-text);font-weight:600}
 .calPanel .quickNotice{margin-top:16px}
 .calPanel .quickNotice a{color:var(--ui-text);text-decoration:underline}
-.calPanel .actionBar{margin-top:20px}
+/* En Anuncios la barra va al final del formulario, sin flotar sobre las publicaciones. */
+.adsPage .actionBar{position:static;margin-top:20px;box-shadow:none;backdrop-filter:none;background:transparent;border:0;padding:0}
 .adsTable{overflow:hidden;border:1px solid var(--ui-border);border-radius:var(--ui-r-md)}
 .adsRow{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:12px;align-items:center;padding:12px 14px;border-top:1px solid var(--ui-border);font-size:13px;font-variant-numeric:tabular-nums}
 .adsRow:first-child{border-top:0}
