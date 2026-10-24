@@ -69,6 +69,19 @@ export async function GET(request:NextRequest){
       local=data||[];
     }
     const byMeta=new Map(local.map((x:any)=>[String(x.meta_post_id),x]));
+    // Las imágenes programadas guardan el id de la foto, no el del post: se empatan por página y minuto exacto.
+    const unmatched=posts.filter(p=>!byMeta.has(String(p.id))&&Number(p.scheduled_publish_time)>0);
+    const byMinute=new Map<number,any>();
+    if(unmatched.length){
+      const epochs=unmatched.map(p=>Number(p.scheduled_publish_time));
+      const {data}=await admin.from("efimero_scheduled_posts")
+        .select("id,meta_post_id,page_id,page_name,publish_at,publish_at_utc,text,category,format,status")
+        .eq("page_id",pageId)
+        .gte("publish_at_utc",new Date((Math.min(...epochs)-60)*1000).toISOString())
+        .lte("publish_at_utc",new Date((Math.max(...epochs)+60)*1000).toISOString());
+      for(const row of data||[]){const minute=Math.round(new Date(String(row.publish_at_utc)).getTime()/60000);if(!byMinute.has(minute))byMinute.set(minute,row)}
+    }
+    const localFor=(post:ScheduledPost)=>byMeta.get(String(post.id))||byMinute.get(Math.round(Number(post.scheduled_publish_time||0)/60))||null;
     return NextResponse.json({
       ok:true,pageId,count:posts.length,
       lastScheduledPublishTime,
@@ -80,7 +93,7 @@ export async function GET(request:NextRequest){
         scheduledPublishTime:Number(post.scheduled_publish_time||0),
         createdTime:post.created_time||null,
         isPublished:Boolean(post.is_published),
-        local:byMeta.get(String(post.id))||null,
+        local:localFor(post),
       })),
     });
   }catch(error:any){

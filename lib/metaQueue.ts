@@ -30,9 +30,11 @@ export function useMetaQueue(pageId:string){
   return {posts,loading,error,refresh};
 }
 
-// Quita de la cola de Meta lo que la app ya muestra, enlazado por meta_post_id o por el id local.
-export function metaOnly(posts:MetaQueuePost[],items:{id:string;metaPostId?:string}[]){
+// Quita de la cola de Meta lo que la app ya muestra: por meta_post_id, por el id local
+// o, si no empatan (las imágenes guardan el id de la foto), por fecha y hora exactas.
+export function metaOnly(posts:MetaQueuePost[],items:{id:string;metaPostId?:string;date?:string;time?:string;status?:string}[]){
   const metaIds=new Set(items.map(x=>x.metaPostId).filter(Boolean));
   const ids=new Set(items.map(x=>x.id));
-  return posts.filter(p=>!metaIds.has(p.id)&&!(p.localId&&ids.has(p.localId)));
+  const slots=new Set(items.filter(x=>x.metaPostId||x.status==="Programado").map(x=>`${x.date} ${x.time}`));
+  return posts.filter(p=>!metaIds.has(p.id)&&!(p.localId&&ids.has(p.localId))&&!slots.has(`${p.date} ${p.time}`));
 }
