@@ -6,7 +6,8 @@ import { exchangeCodeForLongLivedToken, getMetaRedirectUri, metaGraphGet, syncMe
 
 function metaRedirect(request: NextRequest, status: string, detail?: string) {
   const url = new URL("/", request.url);
-  url.searchParams.set("section", "meta");
+  // Vuelve a Anuncios si la conexión se inició desde ahí.
+  url.searchParams.set("section", request.cookies.get("efimero_meta_oauth_return")?.value === "ads" ? "ads" : "meta");
   url.searchParams.set("meta", status);
   if (detail) url.searchParams.set("detail", detail.slice(0, 180));
   return url;

@@ -1,0 +1,41 @@
+/* Anuncios de Me gusta */
+.adsGrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:start}
+.adsHead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
+.adsHead h2{margin:0;font-size:16px;font-weight:600}
+.adsHead p{margin:4px 0 0;font-size:13px;color:var(--ui-text-2)}
+.adsHead .statusPill{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.adsHeadActions{display:flex;align-items:center;gap:8px}
+.adsHeadActions select{width:auto;min-width:150px}
+.adsForm{display:flex;flex-direction:column;gap:16px}
+.adsForm .field>span small{margin-left:6px;font-weight:400;color:var(--ui-text-3)}
+.adsPosts{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;max-height:300px;overflow:auto;scrollbar-width:thin}
+.adsPosts button{display:flex;flex-direction:column;gap:4px;padding:4px;border:2px solid var(--ui-border);border-radius:var(--ui-r-sm);background:var(--ui-bg);cursor:pointer;text-align:left}
+.adsPosts button.active{border-color:var(--ui-text)}
+.adsPosts img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:6px}
+.adsPostText{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;aspect-ratio:4/5;padding:6px;font-size:11px;line-height:1.35;color:var(--ui-text-2)}
+.adsPosts small{display:flex;align-items:center;gap:3px;padding:0 2px;font-size:11px;color:var(--ui-text-3);font-variant-numeric:tabular-nums}
+.adsPostsEmpty{display:flex;align-items:center;gap:8px;padding:16px;border:1px dashed var(--ui-border);border-radius:var(--ui-r-md);font-size:13px;color:var(--ui-text-3)}
+.adsCountries{display:flex;flex-wrap:wrap;gap:6px}
+.adsCountries button{padding:5px 10px;border:1px solid var(--ui-border);border-radius:999px;background:transparent;font-size:12px;color:var(--ui-text-2);cursor:pointer}
+.adsCountries button.active{border-color:var(--ui-text);background:var(--ui-text);color:var(--ui-bg)}
+.adsSummary{display:flex;align-items:flex-start;gap:8px;margin-top:20px;padding:12px 14px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-surface-2);font-size:13px;line-height:1.5;color:var(--ui-text-2)}
+.adsSummary svg{flex:none;margin-top:2px}
+.adsSummary b{color:var(--ui-text);font-weight:600}
+.calPanel .quickNotice{margin-top:16px}
+.calPanel .quickNotice a{color:var(--ui-text);text-decoration:underline}
+.calPanel .actionBar{margin-top:20px}
+.adsTable{overflow:hidden;border:1px solid var(--ui-border);border-radius:var(--ui-r-md)}
+.adsRow{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:12px;align-items:center;padding:12px 14px;border-top:1px solid var(--ui-border);font-size:13px;font-variant-numeric:tabular-nums}
+.adsRow:first-child{border-top:0}
+.adsRow.head{background:var(--ui-surface-2);font-size:12px;color:var(--ui-text-3)}
+.adsName{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.adsName a{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ui-text)}
+.adsName a:hover{text-decoration:underline}
+.adsRow b{font-weight:600}
+.adsEmpty{display:flex;align-items:center;justify-content:center;gap:10px;min-height:120px;font-size:13px;color:var(--ui-text-3)}
+.adsConnect{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center}
+.adsConnect h2{margin:0;font-size:16px;font-weight:600}
+.adsConnect p{margin:4px 0 0;font-size:13px;line-height:1.55;color:var(--ui-text-2)}
+.adsConnectIcon{display:grid;place-items:center;width:40px;height:40px;border-radius:var(--ui-r-md);background:var(--ui-surface-3)}
+@media(max-width:1100px){.adsGrid{grid-template-columns:1fr}}
+@media(max-width:720px){.adsConnect{grid-template-columns:1fr}.adsRow{grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr))}}

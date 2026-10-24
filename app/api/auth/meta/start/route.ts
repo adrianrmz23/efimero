@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { META_SCOPES, getMetaRedirectUri, metaVersion } from "@/lib/metaServer";
+import { ADS_SCOPES } from "@/lib/metaAds";
 
 export async function GET(request: NextRequest) {
   const appId = (process.env.META_APP_ID || "").trim();
@@ -13,7 +14,9 @@ export async function GET(request: NextRequest) {
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", META_SCOPES.join(","));
+  // ?ads=1 pide además los permisos de anuncios; la conexión normal no cambia.
+  const wantsAds = request.nextUrl.searchParams.get("ads") === "1";
+  url.searchParams.set("scope", (wantsAds ? [...META_SCOPES, ...ADS_SCOPES] : META_SCOPES).join(","));
 
   const response = NextResponse.redirect(url);
   response.cookies.set("efimero_meta_oauth_state", state, {
@@ -23,5 +26,6 @@ export async function GET(request: NextRequest) {
     path: "/",
     maxAge: 10 * 60,
   });
+  response.cookies.set("efimero_meta_oauth_return", wantsAds ? "ads" : "meta", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 10 * 60 });
   return response;
 }

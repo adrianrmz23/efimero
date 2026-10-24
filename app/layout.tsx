@@ -7,6 +7,7 @@ import "./styles/inspiration.css";
 import "./styles/insights.css";
 import "./styles/settings.css";
 import "./styles/dialogs.css";
+import "./styles/ads.css";
 import AuthSessionSync from "@/components/auth/AuthSessionSync";
 import { DialogProvider } from "@/components/ui/DialogProvider";
 

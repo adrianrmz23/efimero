@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Film, House, Library, Radar, Send, Settings2, Sparkles, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, Film, House, Library, Megaphone, Radar, Send, Settings2, Sparkles, type LucideIcon } from "lucide-react";
 
 // Cada sección del sidebar agrupa varias pantallas existentes como pestañas internas.
 export type NavTab = { tab:string; label:string };
@@ -15,6 +15,7 @@ export const navGroups:NavGroup[] = [
   { label:"Publicar", sections:[
     { id:"calendar", label:"Calendario", icon:CalendarDays, tabs:[{tab:"calendar",label:"Calendario"},{tab:"queue",label:"Bandeja de revisión"},{tab:"metaQueue",label:"Cola de Meta"}] },
     { id:"schedule", label:"Programar", icon:Send, tabs:[{tab:"publisher",label:"Un post"},{tab:"bulkTexts",label:"Textos en bulk"},{tab:"bulkImages",label:"Imágenes en bulk"}] },
+    { id:"ads", label:"Anuncios", icon:Megaphone, tabs:[{tab:"ads",label:"Me gusta de la página"}] },
   ]},
   { label:"Analizar", sections:[
     { id:"performance", label:"Rendimiento", icon:BarChart3, tabs:[{tab:"analytics",label:"Resultados"},{tab:"executive",label:"Resumen"},{tab:"learning",label:"Aprendizaje"},{tab:"weekly",label:"Reporte semanal"}] },
