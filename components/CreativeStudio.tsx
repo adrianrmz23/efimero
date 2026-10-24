@@ -3,19 +3,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/700.css";
-import { AlertTriangle, CalendarClock, Check, Church, Copy, Download, FileArchive, FileSpreadsheet, Image as ImageIcon, Loader2, Palette, RefreshCw, ShieldCheck, Trash2, Type, Upload, WandSparkles, X } from "lucide-react";
+import "@fontsource/bebas-neue/400.css";
+import "@fontsource/poppins/400.css";
+import { AlertTriangle, CalendarClock, Check, Church, Copy, Images, Search, Download, FileArchive, FileSpreadsheet, Image as ImageIcon, Loader2, Palette, RefreshCw, ShieldCheck, Trash2, Type, Upload, WandSparkles, X } from "lucide-react";
 import { exampleCsv, readSpreadsheet, type SheetRow } from "@/lib/spreadsheetImport";
 import { findDuplicates, type ScheduledText } from "@/lib/creativeDuplicates";
 import { supabase } from "@/lib/supabase";
 import { CREATIVE_DIMENSIONS, drawCreative, splitCreativeBatch, type CreativeAspect, type CreativeBrand, type CreativeContent, type CreativeKind, type CreativeQueueItem } from "@/lib/creativeStudio";
 import { imagesToZip } from "@/lib/browserZip";
 import { formatPageLabel } from "@/lib/pageLabels";
-import { loadSaintArts, saveSaintArt, removeSaintArt } from "@/lib/creativeArtStore";
+import { loadSaintArts, saveSaintArt, removeSaintArt, loadBackgrounds, saveBackground, removeBackground, type SavedBackground } from "@/lib/creativeArtStore";
 import { useConfirm } from "@/components/ui/DialogProvider";
 
 type Page={id:string;name:string;followers_count?:number|null;fan_count?:number|null};
 type Props={pages:Page[];pageId:string;onChoosePage:(id:string)=>void;onSendToBulk:(items:CreativeQueueItem[])=>void;incoming?:{rows:SheetRow[];source:string;nonce:number}|null};
 type Generated=CreativeQueueItem & {label:string;index:number;artMissing?:boolean;stale?:boolean};
+type StockPhoto={id:string;thumb:string;full:string;alt:string;color:string};
 type Review={status:"pass"|"review"|"block";issues:{message:string}[];correctedText?:string};
 const sourceTextFor=(item:CreativeContent)=>item.kind==="prayer"?`Oración a ${item.saint} por ${item.intention}. ${item.body}`:`${item.title}. ${item.body}`;
 const reviewReason=(r?:Review)=>r?.issues?.[0]?.message||"Necesita revisión manual.";
@@ -41,7 +44,8 @@ export default function CreativeStudio({pages,pageId,onChoosePage,onSendToBulk,i
  const [preview,setPreview]=useState("");const [renderError,setRenderError]=useState("");const [generated,setGenerated]=useState<Generated[]>([]);
  const [busy,setBusy]=useState("");const [error,setError]=useState("");const [notice,setNotice]=useState("");const [loadedPage,setLoadedPage]=useState<string|null>(null);
  const canvas=useRef<HTMLCanvasElement>(null);const artRef=useRef<HTMLInputElement>(null);const avatarRef=useRef<HTMLInputElement>(null);const logoRef=useRef<HTMLInputElement>(null);const sheetRef=useRef<HTMLInputElement>(null);
- const [reviews,setReviews]=useState<Record<string,Review>>({});const [history,setHistory]=useState<ScheduledText[]>([]);
+ const [reviews,setReviews]=useState<Record<string,Review>>({});const [backgrounds,setBackgrounds]=useState<SavedBackground[]>([]);const bgRef=useRef<HTMLInputElement>(null);
+ const [stockOpen,setStockOpen]=useState(false);const [stockQuery,setStockQuery]=useState("cielo atardecer");const [stockPhotos,setStockPhotos]=useState<StockPhoto[]>([]);const [stockPage,setStockPage]=useState(1);const [stockMore,setStockMore]=useState(false);const [stockPicked,setStockPicked]=useState<string[]>([]);const [stockError,setStockError]=useState("");const [stockSource,setStockSource]=useState("Pixabay");const [history,setHistory]=useState<ScheduledText[]>([]);
  const confirm=useConfirm();
  const currentPage=pages.find(p=>p.id===pageId);
  // Cada fila importada es una pieza; para oraciones de santo la columna título se usa como santo.
@@ -86,20 +90,39 @@ export default function CreativeStudio({pages,pageId,onChoosePage,onSendToBulk,i
  function updateBrand(patch:Partial<CreativeBrand>){setBrand(cur=>({...cur,...patch}));setGenerated([])}
  useEffect(()=>{
    const name=currentPage?.name||"Tu página";let b=newBrand(name);let savedKind:CreativeKind="prayer";
-   try{const stored=pageId&&localStorage.getItem(`efimero:creative:v1.9:${pageId}`);if(stored){const data=JSON.parse(stored);if(data?.brand&&typeof data.brand==="object")b={...b,...data.brand,name:String(data.brand.name||name)};if(["prayer","minimal"].includes(data?.kind))savedKind=data.kind;}}catch{/* Prefer fresh defaults for invalid local preferences. */}
-   setBrand(b);setKind(savedKind);setAspect(savedKind==="minimal"?"4:5":"1:1");setArt("");setArtBySaint({});setGenerated([]);setLoadedPage(pageId||"");setError("");setNotice("");
+   try{const stored=pageId&&localStorage.getItem(`efimero:creative:v1.9:${pageId}`);if(stored){const data=JSON.parse(stored);if(data?.brand&&typeof data.brand==="object")b={...b,...data.brand,name:String(data.brand.name||name)};if(["prayer","minimal","photo"].includes(data?.kind))savedKind=data.kind;}}catch{/* Prefer fresh defaults for invalid local preferences. */}
+   setBrand(b);setKind(savedKind);setAspect(savedKind==="prayer"?"1:1":"4:5");setArt("");setArtBySaint({});setGenerated([]);setLoadedPage(pageId||"");setError("");setNotice("");
  },[pageId,currentPage?.name]);
  // Frases enviadas desde el Learning Agent: llegan como filas con la plantilla de texto minimalista.
  const appliedIncoming=useRef(0);
  useEffect(()=>{if(!incoming?.rows.length||incoming.nonce===appliedIncoming.current||loadedPage!==pageId)return;appliedIncoming.current=incoming.nonce;setRows(incoming.rows.slice(0,maxBatch));setSheetName(incoming.source);setBatch("");setKind("minimal");setAspect("4:5");setGenerated([]);setError("");setNotice(`${Math.min(incoming.rows.length,maxBatch)} frases recibidas de ${incoming.source}. Revísalas y genera el lote.`);},[incoming?.nonce,loadedPage]);
+ useEffect(()=>{setBackgrounds([]);if(!pageId)return;let cancelled=false;loadBackgrounds(pageId).then(list=>{if(!cancelled)setBackgrounds(list)}).catch(()=>{/* IndexedDB es opcional. */});return()=>{cancelled=true};},[pageId]);
  useEffect(()=>{if(!pageId)return;let cancelled=false;loadSaintArts(pageId).then(arts=>{if(!cancelled){setArtBySaint(arts);setArt(arts[saintKey(content.saint)]||"");}}).catch(()=>{/* IndexedDB is optional. The in-memory artwork will still work. */});return()=>{cancelled=true};},[pageId]);
  useEffect(()=>{if(loadedPage!==pageId||!pageId)return;try{localStorage.setItem(`efimero:creative:v1.9:${pageId}`,JSON.stringify({brand,kind}));}catch{setNotice("No se pudo guardar la identidad en este navegador. Comprueba el espacio disponible.");}},[brand,kind,pageId,loadedPage]);
- useEffect(()=>{let active=true;const node=canvas.current;if(!node)return;void drawCreative(node,{...content,kind},brand,{art},aspect).then(x=>{if(!active)return;setPreview(x.dataUrl);setRenderError(x.error||"")}).catch(e=>{if(active){setPreview("");setRenderError(e?.message||"Error de composición.")}});return()=>{active=false}},[content,kind,brand,art,aspect]);
+ useEffect(()=>{let active=true;const node=canvas.current;if(!node)return;void drawCreative(node,{...content,kind},brand,{art:kind==="photo"?(backgrounds[0]?.dataUrl||""):art},aspect).then(x=>{if(!active)return;setPreview(x.dataUrl);setRenderError(x.error||"")}).catch(e=>{if(active){setPreview("");setRenderError(e?.message||"Error de composición.")}});return()=>{active=false}},[content,kind,brand,art,aspect,backgrounds]);
  async function pickImage(event:React.ChangeEvent<HTMLInputElement>,destination:"art"|"avatar"|"logo"){
    const f=event.target.files?.[0];event.target.value="";if(!f)return;setBusy("upload");setError("");
    try{const data=await prepareImage(f,destination==="art"?1700:300,destination!=="art");if(destination==="art"){setArt(data);setArtBySaint(prev=>({...prev,[saintKey(content.saint)]:data}));if(pageId)await saveSaintArt(pageId,content.saint,data).catch(()=>setNotice("El arte está disponible durante esta sesión, pero no pudo guardarse en la biblioteca local."));}else updateBrand({[destination]:data});setGenerated([]);setNotice("Imagen cargada. La identidad y los textos se componen sin IA.");}
    catch(e:any){setError(e?.message||"No se pudo cargar el archivo.")}finally{setBusy("")}
  }
+ async function addBackgrounds(event:React.ChangeEvent<HTMLInputElement>){
+   const files=Array.from(event.target.files||[]);event.target.value="";if(!files.length||!pageId)return;setBusy("bg");setError("");
+   try{const added:SavedBackground[]=[];for(const f of files.slice(0,30)){const data=await prepareImage(f,1600);added.push(await saveBackground(pageId,data))}setBackgrounds(cur=>[...cur,...added]);setGenerated([]);setNotice(`${added.length} ${added.length===1?"fondo agregado":"fondos agregados"}.`)}
+   catch(e:any){setError(e?.message||"No se pudieron guardar los fondos.")}finally{setBusy("")}
+ }
+ // Fondos gratuitos (Pixabay o Pexels): se buscan en el servidor y se guardan en la biblioteca como si los subieras tú.
+ async function searchStock(page=1){
+   if(!stockQuery.trim())return;setBusy("stock");setStockError("");
+   try{const r=await fetch(`/api/backgrounds/search?${new URLSearchParams({q:stockQuery.trim(),page:String(page)})}`,{cache:"no-store"});const d=await r.json();if(!r.ok)throw new Error(d.error||"No se pudo buscar.");setStockPhotos(cur=>page===1?d.photos:[...cur,...d.photos]);setStockPage(page);setStockMore(Boolean(d.hasMore));if(d.source)setStockSource(d.source);if(page===1)setStockPicked([]);}
+   catch(e:any){setStockError(e?.message||"No se pudo buscar fondos.")}finally{setBusy("")}
+ }
+ async function addStock(){
+   const picked=stockPhotos.filter(x=>stockPicked.includes(x.id));if(!picked.length||!pageId)return;setBusy("stockAdd");setStockError("");
+   try{const added:SavedBackground[]=[];for(const photo of picked){const r=await fetch(`/api/backgrounds/image?${new URLSearchParams({url:photo.full})}`);if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||"No se pudo descargar una foto.");}const blob=await r.blob();const data=await prepareImage(new File([blob],`${photo.id}.jpg`,{type:blob.type}),1600);added.push(await saveBackground(pageId,data))}
+     setBackgrounds(cur=>[...cur,...added]);setStockPicked([]);setGenerated([]);setNotice(`${added.length} ${added.length===1?"fondo agregado":"fondos agregados"} desde ${stockSource}.`);}
+   catch(e:any){setStockError(e?.message||"No se pudieron agregar los fondos.")}finally{setBusy("")}
+ }
+ async function dropBackground(id:string){setBackgrounds(cur=>cur.filter(b=>b.id!==id));setGenerated([]);if(pageId)await removeBackground(pageId,id).catch(()=>{/* Ya no está en el navegador. */})}
  async function makeArt(){
    if(kind!=="prayer")return;
    if(!await confirm({title:"¿Generar la ilustración?",description:`Se hará una solicitud a la API de imágenes configurada y puede generar un costo.\nSanto: ${content.saint}. Solo la ilustración, sin texto.`,confirmLabel:"Generar"}))return;
@@ -130,11 +153,13 @@ export default function CreativeStudio({pages,pageId,onChoosePage,onSendToBulk,i
        setArtBySaint(arts);
        if(arts[saintKey(content.saint)])setArt(arts[saintKey(content.saint)]);
      }
+     // Fondos: se reparten en orden desde un punto al azar, así dos piezas seguidas no repiten fondo.
+     const bgStart=Math.floor(Math.random()*Math.max(1,backgrounds.length));
      const prepared:Generated[]=[];for(let i=0;i<contents.length;i++){
-     const item=contents[i];const temp=document.createElement("canvas");const pieceArt=kind==="prayer"?(arts[saintKey(item.saint)]||""):"";const result=await drawCreative(temp,item,brand,{art:pieceArt},aspect);
+     const item=contents[i];const temp=document.createElement("canvas");const pieceArt=kind==="prayer"?(arts[saintKey(item.saint)]||""):kind==="photo"?(backgrounds[(bgStart+indexes[i])%Math.max(1,backgrounds.length)]?.dataUrl||""):"";const result=await drawCreative(temp,item,brand,{art:pieceArt},aspect);
      if(result.error)throw new Error(`Imagen ${i+1}: ${result.error}`);
      const label=kind==="prayer"?`${item.saint} · ${item.intention}`:item.title;const index=indexes[i];
-     prepared.push({id:crypto.randomUUID(),index,label,artMissing:kind==="prayer"&&!pieceArt,fileName:humanFile(kind==="prayer"?item.saint:item.title,index),dataUrl:result.dataUrl,sourceText:sourceTextFor(item),pageId,caption:rows[index]?.caption||""});
+     prepared.push({id:crypto.randomUUID(),index,label,artMissing:(kind==="prayer"||kind==="photo")&&!pieceArt,fileName:humanFile(kind==="prayer"?item.saint:item.title,index),dataUrl:result.dataUrl,sourceText:sourceTextFor(item),pageId,caption:rows[index]?.caption||""});
    }
      const next=only?[...generated.filter(g=>!indexes.includes(g.index)),...prepared].sort((a,b)=>a.index-b.index):prepared;setGenerated(next);
      // Revisa en cuanto se generan para marcar las filas antes de intentar programar.
@@ -151,7 +176,7 @@ export default function CreativeStudio({pages,pageId,onChoosePage,onSendToBulk,i
  async function sendToBulk(){
    if(!pageId||!generated.length){setError("Genera un lote y selecciona una página antes de programar.");return;}
    if(generated.some(x=>x.pageId!==pageId)){setError("El lote pertenece a otra página. Regénéralo con la página actual.");return;}
-   if(generated.some(x=>x.artMissing)){setError("Algunas oraciones siguen sin ilustración del santo correspondiente. Sube o genera un arte por santo y vuelve a preparar el lote.");return;}
+   if(generated.some(x=>x.artMissing)){setError(kind==="photo"?"Sube al menos un fondo en el Paso 2 y vuelve a generar el lote.":"Algunas oraciones siguen sin ilustración del santo correspondiente. Sube o genera un arte por santo y vuelve a preparar el lote.");return;}
    if(staleIndexes.length){setError(`Cambiaste el texto de ${staleIndexes.length} ${staleIndexes.length===1?"fila":"filas"}. Pulsa «Regenerar cambiadas» antes de programar.`);return;}
    const repeated=generated.filter(g=>duplicates[g.index]).length;
    if(repeated&&!await confirm({title:`${repeated} ${repeated===1?"imagen repetida":"imágenes repetidas"}`,description:"Hay textos repetidos dentro del lote o que ya programaste en los últimos 6 meses en esta página. Puedes quitarlos con «Quitar repetidas».",confirmLabel:"Programar de todos modos"}))return;
@@ -173,6 +198,7 @@ export default function CreativeStudio({pages,pageId,onChoosePage,onSendToBulk,i
          <div className="studioOptionGrid" role="group" aria-label="Plantilla">
            <button type="button" className={kind==="prayer"?"studioOption active":"studioOption"} aria-pressed={kind==="prayer"} onClick={()=>{setKind("prayer");setAspect("1:1");setGenerated([])}}><span className="studioOptionIcon"><Church size={18}/></span><span className="studioOptionText"><strong>Oración de santo</strong><small>Ilustración, marco y oración</small></span></button>
            <button type="button" className={kind==="minimal"?"studioOption active":"studioOption"} aria-pressed={kind==="minimal"} onClick={()=>{setKind("minimal");setAspect("4:5");setGenerated([])}}><span className="studioOptionIcon"><Type size={18}/></span><span className="studioOptionText"><strong>Texto minimalista</strong><small>Avatar, nombre y @usuario fijos</small></span></button>
+           <button type="button" className={kind==="photo"?"studioOption active":"studioOption"} aria-pressed={kind==="photo"} onClick={()=>{setKind("photo");setAspect("4:5");setGenerated([])}}><span className="studioOptionIcon"><Images size={18}/></span><span className="studioOptionText"><strong>Oración con fondo</strong><small>Foto, título grande y oración centrada</small></span></button>
          </div>
          <label><span>Página de Facebook</span><select value={pageId} onChange={e=>onChoosePage(e.target.value)}><option value="">Selecciona una página</option>{pages.map(p=><option key={p.id} value={p.id}>{formatPageLabel(p)}</option>)}</select></label>
          <div className="fieldRow"><label><span>Nombre en la imagen</span><input value={brand.name} onChange={e=>updateBrand({name:e.target.value})} maxLength={80}/></label><label><span>@usuario <small>opcional</small></span><input value={brand.handle} placeholder="@tupagina" onChange={e=>updateBrand({handle:e.target.value})} maxLength={70}/></label></div>
@@ -185,7 +211,19 @@ export default function CreativeStudio({pages,pageId,onChoosePage,onSendToBulk,i
          <div className="studioCardHead"><div><span className="studioStepLabel">Paso 2</span><h2>Contenido de la pieza</h2><p>Solo cambian estos campos entre publicaciones.</p></div></div>
          <div className="studioField"><span>Formato</span><div className="segmented studioSegmented" role="group" aria-label="Formato">{aspectOptions.map(([value,label])=><button type="button" key={value} className={aspect===value?"active":""} onClick={()=>{setAspect(value);setGenerated([])}}>{label}</button>)}</div></div>
          {kind==="prayer"?<div className="fieldRow"><label><span>Santo o advocación</span><input value={content.saint} onChange={e=>{change({saint:e.target.value});setArt(artBySaint[saintKey(e.target.value)]||"")}}/></label><label><span>Intención</span><input value={content.intention} onChange={e=>change({intention:e.target.value})} placeholder="Por el trabajo y la bendición"/></label></div>:<label><span>Título</span><input value={content.title} onChange={e=>change({title:e.target.value})}/></label>}
-         <label><span>{kind==="prayer"?"Oración":"Texto principal"}</span><textarea value={content.body} rows={7} onChange={e=>change({body:e.target.value})}/></label>
+         <label><span>{kind==="minimal"?"Texto principal":"Oración"}</span><textarea value={content.body} rows={7} onChange={e=>change({body:e.target.value})}/></label>
+         {kind==="photo"&&<div className="studioSubsection">
+           <div className="studioSubsectionHead"><strong>Fondos de la página</strong><span>Sube fotos tuyas o libres de derechos. Se reparten entre las piezas del lote y se guardan en este navegador por página.</span></div>
+           <input ref={bgRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e=>void addBackgrounds(e)}/>
+           <div className="studioUploadRow"><button className="uiBtn uiBtnSecondary" onClick={()=>bgRef.current?.click()} disabled={!!busy||!pageId}>{busy==="bg"?<Loader2 size={16} className="spin"/>:<Upload size={16}/>} Subir fondos</button><button className="uiBtn uiBtnSecondary" onClick={()=>{setStockOpen(o=>!o);if(!stockPhotos.length)void searchStock(1)}} disabled={!!busy||!pageId} aria-expanded={stockOpen}><Search size={16}/> Buscar fondos gratis</button><span className="studioHint">{backgrounds.length?`${backgrounds.length} ${backgrounds.length===1?"fondo":"fondos"} · la vista previa usa el primero`:"Recomendado: 15 a 20 fondos distintos"}</span></div>
+           {stockOpen&&<div className="studioStock">
+             <form className="studioStockSearch" onSubmit={e=>{e.preventDefault();void searchStock(1)}}><input value={stockQuery} onChange={e=>setStockQuery(e.target.value)} placeholder="cielo atardecer, vitral, velas, montañas…" aria-label="Buscar fondos"/><button className="uiBtn uiBtnSecondary" type="submit" disabled={!!busy||!stockQuery.trim()}>{busy==="stock"?<Loader2 size={16} className="spin"/>:<Search size={16}/>} Buscar</button></form>
+             {stockError&&<div className="studioNotice error"><AlertTriangle size={16}/><span>{stockError}</span></div>}
+             {!!stockPhotos.length&&<div className="studioStockGrid">{stockPhotos.map(photo=>{const picked=stockPicked.includes(photo.id);return <button type="button" key={photo.id} className={picked?"picked":""} style={{background:photo.color}} onClick={()=>setStockPicked(cur=>picked?cur.filter(x=>x!==photo.id):[...cur,photo.id])} aria-pressed={picked} title={photo.alt}><img src={photo.thumb} alt={photo.alt} loading="lazy"/>{picked&&<span><Check size={14}/></span>}</button>})}</div>}
+             <div className="studioStockFoot"><a href={stockSource==="Pexels"?"https://www.pexels.com":"https://pixabay.com"} target="_blank" rel="noreferrer">Fotos de {stockSource}</a><div>{stockMore&&<button type="button" className="linkButton" onClick={()=>void searchStock(stockPage+1)} disabled={!!busy}>Más resultados</button>}<button type="button" className="uiBtn uiBtnPrimary" onClick={()=>void addStock()} disabled={!!busy||!stockPicked.length}>{busy==="stockAdd"?<Loader2 size={16} className="spin"/>:<Check size={16}/>} Agregar {stockPicked.length||""} {stockPicked.length===1?"fondo":"fondos"}</button></div></div>
+           </div>}
+           {!!backgrounds.length&&<div className="studioBgGrid">{backgrounds.map((bg,i)=><figure key={bg.id}><img src={bg.dataUrl} alt={`Fondo ${i+1}`}/><button type="button" className="studioGalleryRemove" onClick={()=>void dropBackground(bg.id)} aria-label={`Quitar fondo ${i+1}`}><X size={14}/></button></figure>)}</div>}
+         </div>}
          {kind==="prayer"&&<div className="studioSubsection">
            <div className="studioSubsectionHead"><strong>Ilustración del santo</strong><span>La IA crea solo arte original sin texto. Se guarda en este navegador por página y santo.</span></div>
            <input ref={artRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>void pickImage(e,"art")}/>
@@ -244,7 +282,7 @@ export default function CreativeStudio({pages,pageId,onChoosePage,onSendToBulk,i
        </div>
        {!!generated.length&&<div className="studioBatch">
          <div className="studioBatchHead"><div><strong>Lote listo · {generated.length} {generated.length===1?"imagen":"imágenes"}</strong><span>Meta revisa el texto antes de programar.</span></div></div>
-         <div className="studioGallery">{generated.map(x=>{const n=x.index+1;const textBad=!x.stale&&reviewOf(x.sourceText)&&reviewOf(x.sourceText)?.status!=="pass";const cap=reviewOf(captionFor(x));const flag=x.artMissing?"Falta arte":x.stale?"Regenerar":textBad?"Revisar texto":cap&&cap.status!=="pass"?"Revisar caption":duplicates[x.index]?"Repetida":"";
+         <div className="studioGallery">{generated.map(x=>{const n=x.index+1;const textBad=!x.stale&&reviewOf(x.sourceText)&&reviewOf(x.sourceText)?.status!=="pass";const cap=reviewOf(captionFor(x));const flag=x.artMissing?(kind==="photo"?"Falta fondo":"Falta arte"):x.stale?"Regenerar":textBad?"Revisar texto":cap&&cap.status!=="pass"?"Revisar caption":duplicates[x.index]?"Repetida":"";
            return <figure key={x.id} className={x.artMissing||x.stale||duplicates[x.index]?"missing":textBad||flag==="Revisar caption"?"flagged":""}><img src={x.dataUrl} alt={`Creatividad ${n}: ${x.label}`}/><button type="button" className="studioGalleryRemove" onClick={()=>setGenerated(cur=>cur.filter(g=>g.id!==x.id))} aria-label={`Quitar imagen ${n}`}><X size={14}/></button><figcaption>{n}. {x.label}{flag&&<b> · {flag}</b>}</figcaption></figure>})}</div>
          <div className="studioBatchActions"><button className="uiBtn uiBtnSecondary" onClick={()=>void downloadZip()} disabled={!!busy}><FileArchive size={16}/> Descargar ZIP</button><button className="uiBtn uiBtnPrimary" onClick={()=>void sendToBulk()} disabled={!!busy}>{busy==="review"?<Loader2 size={16} className="spin"/>:<CalendarClock size={16}/>} {busy==="review"?"Revisando…":"Revisar y programar"}</button></div>
        </div>}

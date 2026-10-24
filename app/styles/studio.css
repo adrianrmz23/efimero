@@ -130,7 +130,7 @@
 /* =====================================================================
    Estudio creativo
    ===================================================================== */
-.studioOptionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.studioOptionGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
 .studioOption{display:flex;align-items:center;gap:12px;min-width:0;padding:14px;border:1px solid var(--ui-border-strong);border-radius:var(--ui-r-md);background:transparent;color:var(--ui-text);text-align:left;cursor:pointer;transition:border-color .15s var(--ui-ease),background .15s var(--ui-ease)}
 .studioOption:hover{background:var(--ui-surface-2)}
 .studioOption.active{border-color:var(--ui-accent-border);background:var(--ui-accent-soft)}
@@ -285,3 +285,20 @@
 .studioRowChecks .linkButton{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .studioGallery figure.flagged img{border-color:var(--ui-danger-border)}
 .studioGallery figure.flagged figcaption b{color:var(--ui-danger)}
+/* Plantilla "Oración con fondo": biblioteca de fondos */
+.studioBgGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;max-height:220px;overflow:auto;scrollbar-width:thin}
+.studioBgGrid figure{position:relative;margin:0}
+.studioBgGrid img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;border:1px solid var(--ui-border);border-radius:var(--ui-r-sm)}
+.studioBgGrid figure:hover .studioGalleryRemove{opacity:1}
+/* Buscador de fondos gratuitos (Pexels) */
+.studioStock{display:flex;flex-direction:column;gap:12px;padding:12px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-bg)}
+.studioStockSearch{display:flex;gap:8px}
+.studioStockSearch input{flex:1;min-width:0}
+.studioStockGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;max-height:340px;overflow:auto;scrollbar-width:thin}
+.studioStockGrid button{position:relative;padding:0;border:2px solid transparent;border-radius:var(--ui-r-sm);overflow:hidden;cursor:pointer;aspect-ratio:4/5}
+.studioStockGrid button.picked{border-color:var(--ui-text)}
+.studioStockGrid img{display:block;width:100%;height:100%;object-fit:cover}
+.studioStockGrid button span{position:absolute;top:6px;right:6px;width:22px;height:22px;display:grid;place-items:center;border-radius:999px;background:var(--ui-text);color:var(--ui-bg)}
+.studioStockFoot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.studioStockFoot>div{display:flex;align-items:center;gap:12px}
+.studioStockFoot a{font-size:12px;color:var(--ui-text-3)}

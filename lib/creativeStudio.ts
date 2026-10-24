@@ -1,5 +1,5 @@
 /** Plantillas de Efímero v1.9. Composición determinista: la IA nunca escribe el texto. */
-export type CreativeKind = "prayer" | "minimal";
+export type CreativeKind = "prayer" | "minimal" | "photo";
 export type CreativeAspect = "1:1" | "4:5" | "9:16";
 export type CreativeContent = { kind:CreativeKind; title:string; body:string; saint:string; intention:string };
 export type CreativeBrand = { name:string; handle:string; avatar:string; logo:string; accent:string };
@@ -89,6 +89,65 @@ async function drawMinimal(ctx:CanvasRenderingContext2D,w:number,h:number,conten
   return true;
 }
 
+// Plantilla "Oración con fondo": foto oscurecida, título condensado en mayúsculas, oración centrada y firma tenue.
+const fontTitle='"Bebas Neue", Impact, "Arial Narrow", sans-serif';
+const fontRound='Poppins, "Segoe UI", Arial, sans-serif';
+async function ensurePhotoFonts(){
+  if(typeof document==="undefined"||!document.fonts)return;
+  try{await Promise.all([document.fonts.load(`400 48px "Bebas Neue"`),document.fonts.load(`400 48px Poppins`)])}catch{/* Usa la fuente de respaldo. */}
+}
+// Brillo medio del fondo (0 a 1) para oscurecer más las fotos claras.
+function averageLuminance(img:HTMLImageElement){
+  try{const c=document.createElement("canvas");c.width=c.height=16;const x=c.getContext("2d");if(!x)return .4;x.drawImage(img,0,0,16,16);const d=x.getImageData(0,0,16,16).data;let sum=0;for(let i=0;i<d.length;i+=4)sum+=(d[i]*.299+d[i+1]*.587+d[i+2]*.114)/255;return sum/(d.length/4)}catch{return .4}
+}
+async function drawPhoto(ctx:CanvasRenderingContext2D,w:number,h:number,content:CreativeContent,brand:CreativeBrand,background:string){
+  await ensurePhotoFonts();
+  if(background){
+    const img=await imageFrom(background);crop(ctx,img,0,0,w,h);
+    ctx.fillStyle=`rgba(0,0,0,${clamp(.42+(averageLuminance(img)-.35)*.7,.42,.72)})`;ctx.fillRect(0,0,w,h);
+  }else{
+    const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,"#1d2433");g.addColorStop(1,"#0b0d12");ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+  }
+  const pad=w*.065, textW=w-pad*2;
+  const title=(content.title||"").trim().toLocaleUpperCase("es-MX");
+  const body=(content.body||"").trim();
+  // Autoajuste: título y oración bajan juntos hasta que el bloque quepa en el 80% del alto.
+  let titleSize=w*.088, size=w*.031, titleLines:string[]=[], lines:string[]=[], blockH=0;
+  const lineH=()=>size*1.16, blankH=()=>lineH()*.95, titleLineH=()=>titleSize, gap=()=>size*1.6;
+  const measure=()=>{
+    ctx.font=`400 ${titleSize}px ${fontTitle}`;titleLines=title?wrapVerses(ctx,title,textW):[];
+    ctx.font=`400 ${size}px ${fontRound}`;lines=wrapVerses(ctx,body,textW);
+    blockH=titleLines.length*titleLineH()+(titleLines.length?gap():0)+lines.reduce((n,l)=>n+(l?lineH():blankH()),0);
+  };
+  // Si el título cabe en un renglón reduciéndolo un poco, se prefiere así (como en las referencias).
+  if(title){ctx.font=`400 ${titleSize}px ${fontTitle}`;const single=ctx.measureText(title).width;if(single>textW&&titleSize*textW/single>=w*.062)titleSize=Math.floor(titleSize*textW/single)}
+  measure();
+  while(blockH>h*.8&&size>w*.019){size-=1;titleSize=Math.max(w*.055,titleSize-1.5);measure()}
+  if(blockH>h*.88)return false;
+  const footerH=w*.075;
+  let y=Math.max(h*.06,(h-blockH-footerH)/2);
+  ctx.textAlign="center";ctx.textBaseline="top";ctx.fillStyle="#ffffff";
+  ctx.shadowColor="rgba(0,0,0,.45)";ctx.shadowBlur=w*.008;ctx.shadowOffsetY=w*.002;
+  ctx.font=`400 ${titleSize}px ${fontTitle}`;
+  for(const l of titleLines){ctx.fillText(l,w/2,y,textW);y+=titleLineH()}
+  if(titleLines.length)y+=gap();
+  ctx.font=`400 ${size}px ${fontRound}`;
+  for(const l of lines){if(l){ctx.fillText(l,w/2,y+(lineH()-size)/2,textW);y+=lineH()}else y+=blankH()}
+  // Firma: logo (o una "f") y el nombre de la página, en blanco tenue debajo de la oración.
+  ctx.shadowColor="transparent";ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+  const name=(brand.name||"").trim();
+  if(name){
+    const nameSize=w*.031, icon=nameSize*1.3, fy=Math.min(h*.95-icon/2,y+footerH*.6);
+    ctx.font=`400 ${nameSize}px ${fontRound}`;const nameW=ctx.measureText(name).width;const x0=w/2-(icon+nameSize*.6+nameW)/2;
+    ctx.globalAlpha=.42;
+    if(brand.logo){const logo=await imageFrom(brand.logo);crop(ctx,logo,x0,fy-icon/2,icon,icon)}
+    else{ctx.fillStyle="#ffffff";ctx.font=`700 ${icon*1.15}px Arial, sans-serif`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("f",x0+icon/2,fy+icon*.04)}
+    ctx.fillStyle="#ffffff";ctx.font=`400 ${nameSize}px ${fontRound}`;ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillText(name,x0+icon+nameSize*.6,fy);
+    ctx.globalAlpha=1;
+  }
+  return true;
+}
+
 export async function drawCreative(canvas:HTMLCanvasElement,content:CreativeContent,brand:CreativeBrand,assets:CreativeAsset,aspect:CreativeAspect):Promise<{dataUrl:string;error?:string}>{
  const [w,h]=CREATIVE_DIMENSIONS[aspect];canvas.width=w;canvas.height=h;const ctx=canvas.getContext("2d");if(!ctx)throw new Error("No se pudo iniciar Canvas.");const isPrayer=content.kind==="prayer";
  let fits=true;
@@ -108,6 +167,8 @@ export async function drawCreative(canvas:HTMLCanvasElement,content:CreativeCont
    if(brand.logo){const logo=await imageFrom(brand.logo);crop(ctx,logo,w*.668,h*.89,w*.082,w*.052);}
    ctx.fillText(brand.name||"TU PÁGINA",w*.73,h*.918,w*.42);
    ornate(ctx,w,h);
+ }else if(content.kind==="photo"){
+   fits=await drawPhoto(ctx,w,h,content,brand,assets.art);
  }else{
    fits=await drawMinimal(ctx,w,h,content,brand);
  }
