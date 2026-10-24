@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Clipboard, Loader2, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clipboard, Loader2, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
 type Review={status:string;score:number;issues?:Array<{code?:string;message?:string}>;correctedText?:string};
 
@@ -92,29 +92,34 @@ export default function PrayerReelGenerator(){
   const selectedLength=lengths.find(x=>x.id===length)||lengths[0];
   const words=text.trim()?text.trim().split(/\s+/).length:0;
 
-  return <section className="prayerStudio">
-    <div className="prayerStudioHeader">
-      <div><span className="overline">ORACIONES PARA REEL</span><h2>Generador de oraciones</h2><p>Textos largos, serenos y listos para que tú armes el reel. Efímero revisa cada salida antes de mostrártela como aprobada.</p></div>
-      <div className="prayerComplianceBadge"><ShieldCheck size={17}/><div><strong>Compliance obligatorio</strong><span>Sin engagement bait</span></div></div>
+  return <section className="studioPrayer" aria-labelledby="prayer-title">
+    <div className="studioSectionHead">
+      <div><span className="overline">ORACIONES PARA REEL</span><h2 id="prayer-title">Generador de oraciones</h2><p>Textos largos y serenos, listos para que armes el reel. Cada oración pasa por Compliance antes de mostrarse como aprobada.</p></div>
+      <span className="statusPill tone-accent studioBadge"><ShieldCheck size={14}/> Compliance obligatorio</span>
     </div>
-    <div className="prayerStudioGrid">
-      <div className="prayerControls">
-        <label><span>Tema de la oración</span><select value={theme} onChange={e=>setTheme(e.target.value as any)}>{themes.map(x=><option key={x}>{x}</option>)}</select></label>
-        <label><span>Extensión</span><select value={length} onChange={e=>setLength(e.target.value as any)}>{lengths.map(x=><option key={x.id} value={x.id}>{x.label} · {x.note}</option>)}</select><small>{selectedLength.note}, pensada para lectura pausada en reel.</small></label>
-        <label><span>Enfoque adicional <em>opcional</em></span><textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={4} placeholder="Ej. para alguien que está pasando un momento difícil y necesita recuperar calma…"/></label>
-        <button className="prayerGenerateButton" onClick={generate} disabled={busy}>{busy?<Loader2 className="spin" size={19}/>:text?<RefreshCw size={19}/>:<Sparkles size={19}/>} {busy?"Generando y revisando…":text?"Generar otra oración":"Generar oración"}</button>
-        <div className="prayerRules"><ShieldCheck size={16}/><span>Sin pedir comentar, compartir, reaccionar, etiquetar ni escribir “Amén”. El cierre puede ser simplemente “Amén”.</span></div>
+    <div className="studioTwoCol">
+      <div className="studioCard">
+        <label><span>Tema</span><select value={theme} onChange={e=>setTheme(e.target.value as any)}>{themes.map(x=><option key={x}>{x}</option>)}</select></label>
+        <label><span>Extensión</span><select value={length} onChange={e=>setLength(e.target.value as any)}>{lengths.map(x=><option key={x.id} value={x.id}>{x.label} · {x.note}</option>)}</select><small>{selectedLength.note}, para una lectura pausada en pantalla.</small></label>
+        <label><span>Enfoque adicional <small>opcional</small></span><textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={4} placeholder="Ej. para alguien que pasa un momento difícil y necesita recuperar la calma…"/></label>
+        <button className="uiBtn uiBtnPrimary wide studioGenerate" onClick={generate} disabled={busy}>{busy?<Loader2 className="spin" size={16}/>:text?<RefreshCw size={16}/>:<Sparkles size={16}/>} {busy?"Generando y revisando…":text?"Generar otra oración":"Generar oración"}</button>
+        <p className="studioNote"><ShieldCheck size={14}/><span>Sin pedir comentar, compartir, reaccionar, etiquetar ni escribir “Amén”. El cierre puede ser simplemente “Amén”.</span></p>
       </div>
 
-      <div className={text?"prayerResult hasText":"prayerResult"}>
-        {!text?<div className="prayerEmpty"><Sparkles size={34}/><strong>La oración aparecerá aquí</strong><span>Solo texto, lista para copiar y montar en tu reel.</span></div>:<>
-          <div className="prayerResultTop"><div><span>{theme}</span>{model&&<small>{model}</small>}</div>{review&&<b className="prayerPass"><CheckCircle2 size={14}/> PASS · {Math.round(Number(review.score||0))}/100</b>}</div>
-          <textarea value={text} onChange={e=>setText(e.target.value)} spellCheck={false}/>
-          <div className="prayerMeta"><span>{words} palabras</span><span>{text.length} caracteres</span><span>{selectedLength.note}</span></div>
-          <button className="uiBtn uiBtnPrimary prayerCopy" onClick={copy}><Clipboard size={16}/> {copied?"Copiado":"Copiar texto"}</button>
+      <div className="studioCard studioSticky studioPrayerResult">
+        {!text?<div className="studioEmpty"><Sparkles size={28}/><strong>La oración aparecerá aquí</strong><span>Solo texto, lista para copiar y montar en tu reel.</span></div>:<>
+          <div className="studioResultTop">
+            <div><span className="statusPill tone-neutral">{theme}</span>{model&&<small>{model}</small>}</div>
+            {review&&<span className="statusPill tone-success"><CheckCircle2 size={13}/> Aprobada · {Math.round(Number(review.score||0))}/100</span>}
+          </div>
+          <textarea className="studioReading" value={text} onChange={e=>setText(e.target.value)} spellCheck={false} aria-label="Oración generada"/>
+          <div className="studioResultFoot">
+            <div className="studioMetaLine"><span>{words} palabras</span><span>{text.length} caracteres</span><span>Objetivo: {selectedLength.note}</span></div>
+            <button className="uiBtn uiBtnSecondary" onClick={copy}>{copied?<CheckCircle2 size={16}/>:<Clipboard size={16}/>} {copied?"Copiado":"Copiar texto"}</button>
+          </div>
         </>}
-        {notice&&<div className="inlineNotice">{notice}</div>}
-        {error&&<div className="inlineNotice error">{error}</div>}
+        {notice&&<div className="studioNotice success"><CheckCircle2 size={16}/><span>{notice}</span></div>}
+        {error&&<div className="studioNotice error"><AlertTriangle size={16}/><span>{error}</span></div>}
       </div>
     </div>
   </section>;

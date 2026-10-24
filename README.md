@@ -1,3 +1,24 @@
+## v1.9 — Estudio Creativo Híbrido
+
+Ya puedes crear oraciones con ilustración, marco y nombre de la página, o posts minimalistas con avatar/@usuario fijos. Soporta arte IA opcional, biblioteca local por santo y página, hasta 12 imágenes por lote, descarga ZIP e integración con Bulk imágenes (revisión Meta antes de programar). **No requiere migración SQL adicional.** Lee `V1_9_ESTUDIO_CREATIVO.md` para los pasos, ejemplos y límites.
+
+---
+
+## Actualización v1.8 — Bulk textos y selección multipágina
+
+- Programación masiva de hasta 40 textos mediante **Principal → Bulk textos**, con revisión Meta, detección de duplicados, horarios por franjas, consulta de cola real y confirmación explícita.
+- Selectores de Facebook identifican cada página por **seguidores** (si Meta permite consultarlos), de otro modo **Me gusta**, y últimos 6 caracteres de su ID.
+- **Antes de usar** sincroniza Supabase ejecutando `supabase/V1_8_FOLLOWERS_MIGRATION.sql` y después **Meta → Actualizar páginas**.
+- Consulta `V1_8_BULK_TEXTOS_Y_SEGUIDORES.md` para instrucciones completas, validaciones y límites.
+
+---
+
+# V1.7 · Multipágina y laboratorio 30 días
+
+Se añadió segmentación de biblioteca/calendario por página de Facebook y un laboratorio de nichos para **Fe, Nostalgia y Humor cotidiano**. Antes de desplegar, ejecuta la migración `supabase/NICHE_LAB_MIGRATION.sql`. Consulta **`V1_7_MULTIPAGINA_NICHOS.md`** para instrucciones y limitaciones.
+
+---
+
 ## V1.6.2 · Smart Queue + AI Fix
 
 - Fecha/hora vacías en Programador individual: Efímero consulta la cola real de Meta y agenda 30 min después del último post pendiente.

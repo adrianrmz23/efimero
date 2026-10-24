@@ -1,13 +1,16 @@
 "use client";
 
+import { formatPageLabel } from "@/lib/pageLabels";
+
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowUpRight, BarChart3, CalendarDays, Clock3, ExternalLink, Facebook,
-  Flame, Loader2, MessageCircle, RadioTower, RefreshCw, Share2, Sparkles, ThumbsUp,
-  TrendingUp, UsersRound, WandSparkles
+  AlertTriangle, BarChart3, CalendarDays, Clock3, ExternalLink, Facebook,
+  Flame, Loader2, RadioTower, RefreshCw, Sparkles, WandSparkles
 } from "lucide-react";
+import { usePages, type MetaPage } from "@/lib/pagesContext";
 
-type PageItem = { id:string; name:string; category?:string; fan_count?:number; picture?:{data?:{url?:string}} };
+// El contexto no garantiza la foto; si llega, se usa como avatar.
+type PageItem = MetaPage & { picture?:{data?:{url?:string}} };
 type MetaPost = {
   id:string; message:string; createdTime?:string|null; permalinkUrl?:string|null; picture?:string|null;
   reactions:number; comments:number; shares:number; reach:number;
@@ -58,18 +61,21 @@ function aggregate(posts:MetaPost[],key:(p:MetaPost)=>string){
 }
 
 export default function FacebookAnalytics({library,toolStats,onOpenMeta}:Props){
-  const [pages,setPages]=useState<PageItem[]>([]);
-  const [pageId,setPageId]=useState("");
+  const {pages,activePageId,loading:loadingPages,error:pagesError}=usePages();
+  // Selección local: elegir otra página aquí no cambia la página activa global.
+  const [localPageId,setPageId]=useState("");
+  const pageId=localPageId&&pages.some(p=>p.id===localPageId)?localPageId:activePageId;
   const [posts,setPosts]=useState<MetaPost[]>([]);
   const [limit,setLimit]=useState(100);
   const [timeZone,setTimeZone]=useState("America/Mexico_City");
-  const [loadingPages,setLoadingPages]=useState(true);
   const [loading,setLoading]=useState(false);
-  const [error,setError]=useState("");
-  const [configured,setConfigured]=useState<boolean|null>(null);
+  const [analyticsError,setError]=useState("");
+  const error=analyticsError||pagesError;
+  // /api/meta/pages solo responde sin páginas y sin error cuando Meta no está configurado.
+  const configured=loadingPages?null:pages.length>0||Boolean(pagesError);
   const [lastUpdated,setLastUpdated]=useState<string>("");
 
-  const page=pages.find(p=>p.id===pageId);
+  const page=pages.find(p=>p.id===pageId) as PageItem|undefined;
   const textPosts=posts.filter(p=>p.message?.trim());
   const totalReactions=posts.reduce((n,p)=>n+p.reactions,0);
   const totalComments=posts.reduce((n,p)=>n+p.comments,0);
@@ -95,18 +101,6 @@ export default function FacebookAnalytics({library,toolStats,onOpenMeta}:Props){
   const bestFormat=(formatRows.filter(r=>r.count>=3)[0]||formatRows[0]);
   const recommendationConfidence=posts.length>=75?"Alta":posts.length>=30?"Media":"Exploratoria";
 
-  useEffect(()=>{void loadPages()},[]);
-
-  async function loadPages(){
-    setLoadingPages(true);setError("");
-    try{
-      const r=await fetch("/api/meta/pages",{cache:"no-store"});const data=await r.json();setConfigured(Boolean(data.configured));
-      if(!r.ok){setError(data.error||"No fue posible consultar tus páginas.");return}
-      const list=data.pages||[];setPages(list);if(list.length)setPageId(old=>old||data.activePageId||list[0].id);
-    }catch{setConfigured(false);setError("No fue posible conectar con Meta desde el servidor.")}
-    finally{setLoadingPages(false)}
-  }
-
   async function loadAnalytics(explicitPageId?:string){
     const target=explicitPageId||pageId;if(!target)return;
     setLoading(true);setError("");
@@ -124,58 +118,95 @@ export default function FacebookAnalytics({library,toolStats,onOpenMeta}:Props){
   const maxCategory=Math.max(1,...categoryRows.map(x=>x.avgScore));
   const maxHour=Math.max(1,...hourRows.map(x=>x.avgScore));
 
-  return <>
-    <div className="pageIntro analyticsIntro">
-      <div><span className="overline">FACEBOOK INTELLIGENCE</span><h1>Qué está funcionando realmente</h1><p>Analiza publicaciones reales de la página seleccionada. Las recomendaciones se basan en la muestra cargada, no en predicciones garantizadas.</p></div>
-      <div className="analyticsActions">
-        <select value={pageId} onChange={e=>setPageId(e.target.value)} disabled={loadingPages||!pages.length}>{pages.length?pages.map(p=><option value={p.id} key={p.id}>{p.name}</option>):<option>Sin páginas</option>}</select>
-        <select value={limit} onChange={e=>setLimit(Number(e.target.value))}><option value={25}>25 posts</option><option value={50}>50 posts</option><option value={100}>100 posts</option></select>
-        <button onClick={()=>loadAnalytics()} disabled={loading||!pageId}>{loading?<Loader2 className="spin" size={18}/>:<RefreshCw size={18}/>} Actualizar</button>
+  const pageAvatar=page?.picture?.data?.url;
+  const pageSub=[page?.fan_count?`${fmt(page.fan_count)} seguidores`:"",page?.category||""].filter(Boolean).join(" · ")||"Página de Facebook";
+
+  return <div className="ins">
+    <div className="pageIntro">
+      <div><span className="overline">RENDIMIENTO</span><h1>Qué está funcionando</h1><p>Compara categorías, horarios y formatos con publicaciones reales de la página. Son señales de la muestra cargada, no predicciones.</p></div>
+      <button className="uiBtn uiBtnSecondary" onClick={onOpenMeta}><RadioTower size={16}/> Sincronizar con Meta</button>
+    </div>
+
+    {!configured&&!loadingPages&&<div className="scheduleValidity warn"><AlertTriangle size={16}/><span><b>Meta todavía no está configurado.</b> Agrega META_USER_ACCESS_TOKEN y reinicia Next.js.</span></div>}
+    {error&&<div className="quickNotice error"><AlertTriangle size={16}/><span><b>No pudimos completar el análisis.</b> {error}</span></div>}
+
+    <section className="insToolbar">
+      <div className="insIdentity">
+        <span className="insAvatar">{pageAvatar?<img src={pageAvatar} alt=""/>:<Facebook size={18}/>}</span>
+        <div><strong>{page?.name||"Selecciona una página"}</strong><small>{pageSub}</small></div>
       </div>
-    </div>
-
-    {!configured&&!loadingPages&&<section className="analyticsWarning"><AlertTriangle size={22}/><div><strong>Meta todavía no está configurado</strong><span>Agrega tu META_USER_ACCESS_TOKEN y reinicia Next.js.</span></div></section>}
-    {error&&<section className="analyticsWarning error"><AlertTriangle size={22}/><div><strong>No pudimos completar el análisis</strong><span>{error}</span></div></section>}
-
-    <section className="analyticsPageStrip">
-      <div className="analyticsPageIdentity">{page?.picture?.data?.url?<img src={page.picture.data.url} alt=""/>:<span><Facebook size={22}/></span>}<div><small>PÁGINA ANALIZADA</small><strong>{page?.name||"Selecciona una página"}</strong><em>{page?.fan_count?`${fmt(page.fan_count)} seguidores`:page?.category||"Facebook Page"}</em></div></div>
-      <div><span>Muestra</span><strong>{posts.length}</strong><small>publicaciones</small></div>
-      <div><span>En biblioteca</span><strong>{importedCount}</strong><small>{enrichedCount} con texto recuperado</small></div>
-      <div><span>Confianza</span><strong>{recommendationConfidence}</strong><small>según tamaño de muestra</small></div>
-      <div className="analyticsTimezone"><span>Zona horaria</span><select value={timeZone} onChange={e=>setTimeZone(e.target.value)}><option value="America/Mexico_City">CDMX</option><option value="America/Cancun">Cancún</option><option value="America/Tijuana">Tijuana</option><option value="America/New_York">Nueva York</option><option value="America/Los_Angeles">Los Ángeles</option><option value="Europe/Madrid">Madrid</option><option value="UTC">UTC</option></select></div>
+      <div className="insControls">
+        <label className="insControl insControlWide"><span>Página</span><select value={pageId} onChange={e=>setPageId(e.target.value)} disabled={loadingPages||!pages.length}>{pages.length?pages.map(p=><option value={p.id} key={p.id}>{formatPageLabel(p)}</option>):<option>Sin páginas</option>}</select></label>
+        <div className="insControl"><span className="insControlLabel">Muestra</span><div className="segmented compact" role="group" aria-label="Tamaño de muestra">{[25,50,100].map(n=><button key={n} type="button" className={limit===n?"active":""} onClick={()=>setLimit(n)}>{n}</button>)}</div></div>
+        <label className="insControl"><span>Zona horaria</span><select value={timeZone} onChange={e=>setTimeZone(e.target.value)}><option value="America/Mexico_City">CDMX</option><option value="America/Cancun">Cancún</option><option value="America/Tijuana">Tijuana</option><option value="America/New_York">Nueva York</option><option value="America/Los_Angeles">Los Ángeles</option><option value="Europe/Madrid">Madrid</option><option value="UTC">UTC</option></select></label>
+        <button className="uiBtn uiBtnSecondary insRefresh" onClick={()=>loadAnalytics()} disabled={loading||!pageId}>{loading?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>} Actualizar</button>
+      </div>
     </section>
 
-    <div className="facebookMetricGrid">
-      <MetricCard icon={<ThumbsUp/>} label="Reacciones" value={fmt(totalReactions)} note={`${fmt(Math.round(avg(posts.map(p=>p.reactions))))} promedio/post`}/>
-      <MetricCard icon={<MessageCircle/>} label="Comentarios" value={fmt(totalComments)} note={`${fmt(Math.round(avg(posts.map(p=>p.comments))))} promedio/post`}/>
-      <MetricCard icon={<Share2/>} label="Compartidos" value={fmt(totalShares)} note={`${fmt(Math.round(avg(posts.map(p=>p.shares))))} promedio/post`} accent/>
-      <MetricCard icon={<TrendingUp/>} label="Score histórico" value={posts.length?avgScore.toFixed(1):"0"} note="shares ponderan más"/>
-      {totalReach>0&&<MetricCard icon={<UsersRound/>} label="Alcance acumulado" value={fmt(totalReach)} note="solo posts con Insights"/>}
-    </div>
-
-    <section className="todayRecommendation">
-      <div className="recommendationIcon"><WandSparkles size={28}/></div>
-      <div className="recommendationCopy"><span>QUÉ PROBAR HOY</span>{posts.length?<><h2>{bestCategory?.label||"Contenido identificable"} {bestHour?`alrededor de ${bestHour.label}`:""}</h2><p>En esta muestra, <strong>{bestCategory?.label||"esa categoría"}</strong>{bestDay?` destaca especialmente en ${bestDay.label.toLowerCase()}`:""}{bestFormat?` y el formato ${bestFormat.label.toLowerCase()} muestra una señal favorable`:""}. Úsalo como punto de partida editorial y valida el resultado con nuevas publicaciones.</p><div className="recommendationTags"><span><Sparkles size={14}/> {recommendationConfidence}</span>{bestCategory&&<span>{bestCategory.count} posts comparados</span>}{bestHour&&<span><Clock3 size={14}/> {bestHour.label}</span>}</div></>:<><h2>Carga publicaciones para construir la recomendación</h2><p>Cuando Meta devuelva la muestra podremos comparar categorías, horarios, días y formatos.</p></>}</div>
-      <button onClick={onOpenMeta}><RadioTower size={17}/> Abrir sincronización</button>
+    <section className="insKpis">
+      <Kpi label="Publicaciones" value={posts.length.toLocaleString("es-MX")} note={`Confianza ${recommendationConfidence.toLowerCase()}`}/>
+      <Kpi label="Reacciones" value={fmt(totalReactions)} note={`${fmt(Math.round(avg(posts.map(p=>p.reactions))))} por post`}/>
+      <Kpi label="Comentarios" value={fmt(totalComments)} note={`${fmt(Math.round(avg(posts.map(p=>p.comments))))} por post`}/>
+      <Kpi label="Compartidos" value={fmt(totalShares)} note={`${fmt(Math.round(avg(posts.map(p=>p.shares))))} por post`}/>
+      <Kpi label="Score medio" value={posts.length?avgScore.toFixed(1):"0"} note="Compartidos pesan más"/>
+      {totalReach>0&&<Kpi label="Alcance" value={fmt(totalReach)} note="Solo posts con Insights"/>}
     </section>
 
-    <div className="analyticsTwoCols">
-      <section className="toolPanel performancePanel"><div className="panelTitle"><div><BarChart3 size={20}/><div><h2>Rendimiento por categoría</h2><p>Score promedio; los compartidos tienen mayor peso.</p></div></div></div><div className="performanceRows">{categoryRows.slice(0,8).map(r=><PerformanceRow key={r.label} row={r} max={maxCategory}/>) }{!categoryRows.length&&<EmptyAnalytics/>}</div></section>
-      <section className="toolPanel performancePanel"><div className="panelTitle"><div><Clock3 size={20}/><div><h2>Mejores horas</h2><p>Hora local según la zona seleccionada.</p></div></div></div><div className="performanceRows">{hourRows.slice(0,8).map(r=><PerformanceRow key={r.label} row={r} max={maxHour}/>) }{!hourRows.length&&<EmptyAnalytics/>}</div></section>
+    <section className="insCard insHighlight">
+      <div className="insHighlightIcon"><WandSparkles size={18}/></div>
+      <div className="insHighlightBody">
+        <span className="insEyebrow">Qué probar hoy</span>
+        {posts.length?<>
+          <h2>{bestCategory?.label||"Contenido identificable"}{bestHour?` alrededor de las ${bestHour.label}`:""}</h2>
+          <p>En esta muestra, <b>{bestCategory?.label||"esa categoría"}</b>{bestDay?` destaca sobre todo los ${bestDay.label.toLowerCase()}`:""}{bestFormat?` y el formato ${bestFormat.label.toLowerCase()} muestra una señal favorable`:""}. Tómalo como punto de partida y valídalo con nuevas publicaciones.</p>
+          <div className="insTags"><span className="statusPill tone-accent">Confianza {recommendationConfidence.toLowerCase()}</span>{bestCategory&&<span className="statusPill tone-neutral">{bestCategory.count} posts comparados</span>}{bestHour&&<span className="statusPill tone-neutral"><Clock3 size={12}/> {bestHour.label}</span>}</div>
+        </>:<>
+          <h2>Carga publicaciones para generar una recomendación</h2>
+          <p>Con la muestra de Meta compararemos categorías, horarios, días y formatos.</p>
+        </>}
+      </div>
+    </section>
+
+    <div className="insGrid2">
+      <section className="insCard"><CardHead icon={<BarChart3 size={16}/>} title="Por categoría" note="Score promedio por publicación."/>{categoryRows.length?<div className="insBars">{categoryRows.slice(0,8).map((r,i)=><BarRow key={r.label} row={r} max={maxCategory} lead={i===0}/>)}</div>:<EmptyAnalytics/>}</section>
+      <section className="insCard"><CardHead icon={<Clock3 size={16}/>} title="Por hora" note="Hora local de la zona seleccionada."/>{hourRows.length?<div className="insBars">{hourRows.slice(0,8).map((r,i)=><BarRow key={r.label} row={r} max={maxHour} lead={i===0}/>)}</div>:<EmptyAnalytics/>}</section>
     </div>
 
-    <div className="analyticsTwoCols">
-      <section className="toolPanel miniLeaderboard"><div className="panelTitle"><div><CalendarDays size={20}/><div><h2>Días de la semana</h2><p>Comparación del score promedio por día.</p></div></div></div>{dayRows.map((r,i)=><div className="leaderRow" key={r.label}><b>{i+1}</b><span>{r.label}<small>{r.count} posts</small></span><strong>{r.avgScore.toFixed(1)}</strong></div>)}{!dayRows.length&&<EmptyAnalytics/>}</section>
-      <section className="toolPanel miniLeaderboard"><div className="panelTitle"><div><Sparkles size={20}/><div><h2>Formato</h2><p>Texto contra piezas con componente visual.</p></div></div></div>{formatRows.map((r,i)=><div className="leaderRow" key={r.label}><b>{i+1}</b><span>{r.label}<small>{r.count} posts</small></span><strong>{r.avgScore.toFixed(1)}</strong></div>)}{!formatRows.length&&<EmptyAnalytics/>}</section>
+    <div className="insGrid2">
+      <section className="insCard"><CardHead icon={<CalendarDays size={16}/>} title="Por día de la semana" note="Ordenado por score promedio."/>{dayRows.length?<RankTable rows={dayRows}/>:<EmptyAnalytics/>}</section>
+      <section className="insCard"><CardHead icon={<Sparkles size={16}/>} title="Por formato" note="Texto frente a piezas con imagen."/>{formatRows.length?<RankTable rows={formatRows}/>:<EmptyAnalytics/>}</section>
     </div>
 
-    <section className="toolPanel topFacebookPosts"><div className="panelTitle"><div><Flame size={20}/><div><h2>Top publicaciones de la muestra</h2><p>Si la Fábrica ya leyó una creatividad, usamos ese texto y su categoría para enriquecer Analytics.</p></div></div></div><div className="topPostList">{topPosts.map((p,i)=>{const memory=libraryByPostId.get(p.id);const resolvedText=memory?.text?.trim()||p.message||"Publicación visual pendiente de lectura en Fábrica.";const resolvedCategory=memory?.category||detectCategory(p.message);return <article key={p.id}><div className="topRank">#{i+1}</div><div className="topPostBody"><div className="topPostMeta"><span>{resolvedCategory}</span>{memory?.extractionMetadata&&<b>Visión IA</b>}<small>{p.createdTime?new Date(p.createdTime).toLocaleDateString("es-MX"):""}</small></div><p>{resolvedText}</p><div className="topPostMetrics"><span>👍 {fmt(p.reactions)}</span><span>💬 {fmt(p.comments)}</span><span>↗ {fmt(p.shares)}</span><strong>Score {performanceScore(p).toFixed(1)}</strong>{p.permalinkUrl&&<a href={p.permalinkUrl} target="_blank" rel="noreferrer">Ver en Facebook <ExternalLink size={13}/></a>}</div></div></article>})}{!topPosts.length&&<EmptyAnalytics/>}</div></section>
+    <section className="insCard insFlush">
+      <CardHead icon={<Flame size={16}/>} title="Mejores publicaciones" note="Si la Fábrica ya leyó la creatividad, usamos ese texto y su categoría."/>
+      {topPosts.length?<div className="insPostTable">
+        <div className="insPostRow insPostHead" aria-hidden="true"><span>#</span><span>Publicación</span><span className="insPostMetrics"><span>Reacc.</span><span>Coment.</span><span>Compart.</span><span>Score</span></span><span/></div>
+        {topPosts.map((p,i)=>{const memory=libraryByPostId.get(p.id);const resolvedText=memory?.text?.trim()||p.message||"Publicación visual pendiente de lectura en Fábrica.";const resolvedCategory=memory?.category||detectCategory(p.message);return <article className="insPostRow" key={p.id}>
+          <span className="insRank">{i+1}</span>
+          <div className="insPostText"><p>{resolvedText}</p><small>{resolvedCategory}{p.createdTime?` · ${new Date(p.createdTime).toLocaleDateString("es-MX")}`:""}{memory?.extractionMetadata&&<span className="statusPill tone-success">Visión IA</span>}</small></div>
+          <span className="insPostMetrics"><span data-label="Reacc.">{fmt(p.reactions)}</span><span data-label="Coment.">{fmt(p.comments)}</span><span data-label="Compart.">{fmt(p.shares)}</span><b data-label="Score">{performanceScore(p).toFixed(1)}</b></span>
+          {p.permalinkUrl?<a className="insRowLink" href={p.permalinkUrl} target="_blank" rel="noreferrer" aria-label="Ver en Facebook" title="Ver en Facebook"><ExternalLink size={14}/></a>:<span/>}
+        </article>})}
+      </div>:<EmptyAnalytics/>}
+    </section>
 
-    <section className="toolPanel internalAnalytics"><div className="panelTitle"><div><RadioTower size={20}/><div><h2>Estado de Efímero Content Engine</h2><p>Actividad interna de la herramienta, separada del rendimiento de Facebook.</p></div></div>{lastUpdated&&<span className="lastUpdated">Meta actualizado {new Date(lastUpdated).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}</span>}</div><div className="internalMetricRow"><InternalMetric label="Calendarios" value={toolStats.calendars}/><InternalMetric label="Posts en calendario" value={toolStats.scheduled}/><InternalMetric label="Memoria editorial" value={toolStats.library}/><InternalMetric label="Similitud alta" value={toolStats.duplicates}/></div></section>
-  </>;
+    <section className="insMetaStrip">
+      <div className="insMetaTitle"><strong>Actividad de la herramienta</strong><small>{lastUpdated?`Meta actualizado a las ${new Date(lastUpdated).toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"})}`:"Independiente del rendimiento en Facebook"}</small></div>
+      <dl>
+        <div><dt>En biblioteca</dt><dd>{importedCount.toLocaleString("es-MX")}</dd></div>
+        <div><dt>Con texto recuperado</dt><dd>{enrichedCount.toLocaleString("es-MX")}</dd></div>
+        <InternalMetric label="Calendarios" value={toolStats.calendars}/>
+        <InternalMetric label="Posts en calendario" value={toolStats.scheduled}/>
+        <InternalMetric label="Memoria editorial" value={toolStats.library}/>
+        <InternalMetric label="Similitud alta" value={toolStats.duplicates}/>
+      </dl>
+    </section>
+  </div>;
 }
 
-function MetricCard({icon,label,value,note,accent=false}:{icon:React.ReactNode;label:string;value:string;note:string;accent?:boolean}){return <article className={accent?"facebookMetric accent":"facebookMetric"}><div>{icon}</div><span>{label}</span><strong>{value}</strong><small>{note}</small></article>}
-function PerformanceRow({row,max}:{row:AggregateRow;max:number}){const width=Math.max(5,(row.avgScore/max)*100);return <div className="performanceRow"><div className="performanceLabel"><span>{row.label}</span><small>{row.count} posts · ↗ {fmt(row.shares)}</small></div><div className="performanceBar"><i style={{width:`${width}%`}}/></div><strong>{row.avgScore.toFixed(1)}</strong></div>}
-function EmptyAnalytics(){return <div className="analyticsEmpty"><BarChart3 size={24}/><span>Sin datos suficientes todavía.</span></div>}
-function InternalMetric({label,value}:{label:string;value:number}){return <div><span>{label}</span><strong>{value.toLocaleString("es-MX")}</strong></div>}
+function Kpi({label,value,note}:{label:string;value:string;note:string}){return <div className="insKpi"><span>{label}</span><strong>{value}</strong><small>{note}</small></div>}
+function CardHead({icon,title,note}:{icon:React.ReactNode;title:string;note:string}){return <div className="insCardHead"><div>{icon}<div><h2>{title}</h2><p>{note}</p></div></div></div>}
+function BarRow({row,max,lead}:{row:AggregateRow;max:number;lead:boolean}){const width=Math.max(4,(row.avgScore/max)*100);return <div className={lead?"insBar lead":"insBar"}><div className="insBarLabel"><span>{row.label}</span><small>{row.count} posts · {fmt(row.shares)} compartidos</small></div><div className="insBarTrack"><i style={{width:`${width}%`}}/></div><strong>{row.avgScore.toFixed(1)}</strong></div>}
+function RankTable({rows}:{rows:AggregateRow[]}){return <table className="insTable"><thead><tr><th>#</th><th>Segmento</th><th className="num">Posts</th><th className="num">Score</th></tr></thead><tbody>{rows.map((r,i)=><tr key={r.label}><td className="insMuted">{i+1}</td><td>{r.label}</td><td className="num insMuted">{r.count}</td><td className="num"><b>{r.avgScore.toFixed(1)}</b></td></tr>)}</tbody></table>}
+function EmptyAnalytics(){return <div className="insEmpty"><BarChart3 size={18}/><span>Sin datos suficientes todavía.</span></div>}
+function InternalMetric({label,value}:{label:string;value:number}){return <div><dt>{label}</dt><dd>{value.toLocaleString("es-MX")}</dd></div>}

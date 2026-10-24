@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, BookmarkPlus, BrainCircuit, Check, ExternalLink, Eye, FileText, Image as ImageIcon, Loader2, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Upload, RadioTower } from "lucide-react";
+import { AlertTriangle, BookmarkPlus, BrainCircuit, Check, ExternalLink, FileText, Image as ImageIcon, Info, Loader2, MessageCircle, Plus, RefreshCw, Share2, ShieldCheck, Sparkles, ThumbsUp, Trash2, Upload, RadioTower, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type LibrarySource="manual"|"historical"|"generated"|"reference";
@@ -59,7 +59,7 @@ export default function InspirationRadar({library,onSaveItems,onOpenLearningAgen
     try{const r=await fetch("/api/inspiration/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:textValue,imageDataUrl:imageValue,sourceName,sourceUrl:urlValue})});const d=await r.json();if(!r.ok)throw new Error(d.error||"No se pudo analizar la referencia.");setAnalysis(d.analysis);if(!textValue.trim()&&d.analysis?.text)setText(d.analysis.text)}catch(e:any){setMessage(e?.message||"No se pudo analizar.")}finally{setAnalyzing(false)}
   }
   async function analyze(){await analyzeValues(text,imageDataUrl,sourceUrl||selectedSource?.page_url||"",selectedSource?.name||"Referencia externa")}
-  async function useExternalPost(post:ExternalPost){setText(post.text);setSourceUrl(post.post_url||selectedSource?.page_url||"");setImageDataUrl("");setImageName("");setGenerated([]);setAnalysis(null);window.scrollTo({top:0,behavior:"smooth"});await analyzeValues(post.text,"",post.post_url||selectedSource?.page_url||"",selectedSource?.name||"Página monitorizada")}
+  async function applyExternalPost(post:ExternalPost){setText(post.text);setSourceUrl(post.post_url||selectedSource?.page_url||"");setImageDataUrl("");setImageName("");setGenerated([]);setAnalysis(null);window.scrollTo({top:0,behavior:"smooth"});await analyzeValues(post.text,"",post.post_url||selectedSource?.page_url||"",selectedSource?.name||"Página monitorizada")}
 
   async function saveReference(){if(!analysis?.text)return;const item:LibraryItem={id:crypto.randomUUID(),text:analysis.text,category:analysis.category||"Otros",format:"Texto",createdAt:new Date().toISOString(),source:"reference",sourceUrl:sourceUrl||selectedSource?.page_url||undefined,sourcePageName:selectedSource?.name||undefined,notes:`${analysis.structure} · ${analysis.mechanism}`,favorite:false,extractionMetadata:{inspirationAnalysis:analysis,watchlistId:sourceId||null,sourceName:selectedSource?.name||null,capturedFrom:imageDataUrl?"screenshot":externalPosts.some(p=>p.text===analysis.text)?"brightdata":"text"}};await onSaveItems([item]);setMessage("Referencia guardada en Biblioteca como fuente externa.")}
   async function generate(){if(!analysis?.text){setGenerationNotice("Analiza primero una referencia antes de generar variaciones.");return}setGenerating(true);setGenerated([]);setGenerationNotice("");setGenerationProvider("");setMessage("");try{const r=await fetch("/api/inspiration/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reference:analysis,count,mode})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error([d.error,d.detail,Array.isArray(d.details)?d.details.join(" · "):""].filter(Boolean).join(" · ")||"No se pudieron generar variaciones.");let items=(Array.isArray(d.items)?d.items:[]) as any[];if(!items.length)throw new Error("La IA respondió, pero no devolvió variaciones utilizables. Vuelve a intentar.");if(items.length){try{const cr=await fetch("/api/compliance/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({texts:items.map(x=>x.text)})});const cd=await cr.json();if(cr.ok&&Array.isArray(cd.items))items=items.map((x,i)=>({...x,compliance:cd.items[i]||x.compliance}))}catch{}}
@@ -67,25 +67,124 @@ export default function InspirationRadar({library,onSaveItems,onOpenLearningAgen
       const db=supabase;if(db)await db.from("efimero_inspiration_runs").insert({watchlist_id:sourceId||null,source_text:analysis.text,mode,result:{items:mapped,source:d.source||null,model:d.model||null}});
     }catch(e:any){setGenerationNotice(e?.message||"No se pudo generar.")}finally{setGenerating(false)}}
   async function saveGenerated(){const chosen=generated.filter(x=>x.selected&&x.compliance?.status==="pass"&&x.novelty>=40);if(!chosen.length){setMessage("Selecciona al menos un texto con Compliance PASS y novedad suficiente.");return}setSaving(true);try{const batch=`inspiration-${Date.now()}`;const items:LibraryItem[]=chosen.map(x=>({id:crypto.randomUUID(),text:x.text,category:x.category||analysis?.category||"General",format:"Texto",createdAt:new Date().toISOString(),source:"generated",favorite:false,generationBatch:batch,notes:`Radar de inspiración · patrón: ${x.patternKept} · cambio: ${x.changed}`,factoryScore:x.novelty,extractionMetadata:{inspiration:{sourceText:analysis?.text,sourceName:selectedSource?.name||null,sourceUrl:sourceUrl||selectedSource?.page_url||null,mode,novelty:x.novelty,sourceSimilarity:x.sourceSimilarity,datasetSimilarity:x.datasetSimilarity,patternKept:x.patternKept,changed:x.changed},compliance:x.compliance}}));await onSaveItems(items);setMessage(`${items.length} textos nuevos guardados en Biblioteca.`)}finally{setSaving(false)}}
-  function useReference(item:LibraryItem){const meta:any=item.extractionMetadata||{};const a=meta.inspirationAnalysis as Analysis|undefined;setText(item.text);setSourceUrl(item.sourceUrl||"");setAnalysis(a||{text:item.text,category:item.category||"Otros",tone:"Referencia histórica",hook:item.text.split(/\s+/).slice(0,6).join(" "),structure:item.notes||"Patrón externo",theme:item.category||"General",mechanism:item.notes||"Identificación",summary:"Referencia guardada anteriormente.",confidence:.6});setImageDataUrl("");setImageName("");setGenerated([]);window.scrollTo({top:0,behavior:"smooth"})}
+  function applyReference(item:LibraryItem){const meta:any=item.extractionMetadata||{};const a=meta.inspirationAnalysis as Analysis|undefined;setText(item.text);setSourceUrl(item.sourceUrl||"");setAnalysis(a||{text:item.text,category:item.category||"Otros",tone:"Referencia histórica",hook:item.text.split(/\s+/).slice(0,6).join(" "),structure:item.notes||"Patrón externo",theme:item.category||"General",mechanism:item.notes||"Identificación",summary:"Referencia guardada anteriormente.",confidence:.6});setImageDataUrl("");setImageName("");setGenerated([]);window.scrollTo({top:0,behavior:"smooth"})}
   const passCount=generated.filter(x=>x.compliance?.status==="pass"&&x.novelty>=40).length;
+  const selectedCount=generated.filter(x=>x.selected).length;
 
-  return <>
-    <div className="pageIntro"><div><span className="overline">RADAR DE INSPIRACIÓN · BRIGHT DATA</span><h1>Vigila páginas públicas y transforma patrones en ideas nuevas</h1><p>Sincroniza posts públicos por URL, compara sus señales visibles y usa la IA para abstraer estructuras sin convertirlas en copias.</p></div><div className="inspirationHeroActions"><div className="inspirationHeroBadge"><RadioTower size={17}/><div><strong>Monitor externo</strong><span>Bright Data + IA + Compliance</span></div></div>{onOpenLearningAgent&&<button className="uiBtn uiBtnPrimary" onClick={onOpenLearningAgent}><BrainCircuit size={16}/> Entrenar Learning Agent</button>}</div></div>
-    <div className="inspirationMetrics"><Metric label="Páginas vigiladas" value={watchlist.length}/><Metric label="Posts sincronizados" value={externalPosts.length}/><Metric label="Variaciones listas" value={passCount}/></div>
-
-    <div className="inspirationGrid">
-      <section className="toolPanel"><div className="panelTitle"><div><BookmarkPlus size={20}/><div><h2>Watchlist</h2><p>Agrega páginas públicas de Facebook y sincroniza sus publicaciones bajo demanda.</p></div></div><div className="radarLimit"><span>Traer</span><select value={syncLimit} onChange={e=>setSyncLimit(Number(e.target.value))}>{[10,25,50,100].map(n=><option key={n} value={n}>{n} posts</option>)}</select></div></div><div className="watchForm"><input value={watchName} onChange={e=>setWatchName(e.target.value)} placeholder="Nombre de la página"/><input value={watchUrl} onChange={e=>setWatchUrl(e.target.value)} placeholder="https://facebook.com/..."/><input value={watchNotes} onChange={e=>setWatchNotes(e.target.value)} placeholder="Qué te interesa observar"/><button className="uiBtn uiBtnPrimary" onClick={addWatch}><Plus size={16}/> Agregar</button></div><div className="watchList">{watchlist.length?watchlist.map(w=><article key={w.id} className={sourceId===w.id?"watchItem active":"watchItem"}><button className="watchSelect" onClick={()=>void selectWatch(w)}><strong>{w.name}</strong><span>{w.last_synced_at?`Última sync ${new Date(w.last_synced_at).toLocaleString("es-MX")}`:w.notes||"Sin sincronizar"}</span></button><button className="watchSync" onClick={()=>void syncWatch(w)} disabled={syncingId===w.id} title="Sincronizar posts públicos">{syncingId===w.id?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>}</button><a href={w.page_url} target="_blank" rel="noreferrer" title="Abrir página"><ExternalLink size={16}/></a><button onClick={()=>removeWatch(w.id)} title="Eliminar"><Trash2 size={16}/></button></article>):<div className="emptyInline">Agrega una página pública para empezar a monitorearla.</div>}</div></section>
-
-      <section className="toolPanel capturePanel"><div className="panelTitle"><div><Search size={20}/><div><h2>Capturar referencia</h2><p>También puedes pegar un copy o subir una captura manualmente.</p></div></div></div><label className="field"><span>Fuente</span><select value={sourceId} onChange={e=>{const id=e.target.value;setSourceId(id);const w=watchlist.find(x=>x.id===id);if(w){setSourceUrl(w.page_url);void loadExternalPosts(w.id)}else setExternalPosts([])}}><option value="">Referencia sin Watchlist</option>{watchlist.map(w=><option value={w.id} key={w.id}>{w.name}</option>)}</select></label><label className="field"><span>URL de la publicación (opcional)</span><input value={sourceUrl} onChange={e=>setSourceUrl(e.target.value)} placeholder="Pega el permalink si lo tienes"/></label><textarea className="inspirationTextarea" value={text} onChange={e=>{setText(e.target.value);setAnalysis(null)}} placeholder="Pega aquí el texto de otra publicación…"/><div className="captureActions"><label className="uiBtn uiBtnSecondary fileLike"><Upload size={16}/> Subir captura<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFile}/></label>{imageDataUrl&&<div className="imageAttached"><ImageIcon size={16}/><span>{imageName}</span><button onClick={()=>{setImageDataUrl("");setImageName("")}}>×</button></div>}<button className="uiBtn uiBtnPrimary" onClick={analyze} disabled={analyzing||(!text.trim()&&!imageDataUrl)}>{analyzing?<Loader2 className="spin" size={16}/>:<Sparkles size={16}/>} Analizar patrón</button></div>{message&&<div className="inlineNotice">{message}</div>}</section>
+  return <div className="insp">
+    <div className="pageIntro">
+      <div><span className="overline">INSPIRACIÓN · RADAR</span><h1>Radar de inspiración</h1><p>Vigila páginas públicas, analiza el patrón de sus publicaciones y conviértelo en ideas nuevas sin copiar la redacción.</p></div>
+      <div className="inspIntroActions"><span className="inspPill"><RadioTower size={14}/> Bright Data · IA · Compliance</span>{onOpenLearningAgent&&<button type="button" className="uiBtn uiBtnSecondary" onClick={onOpenLearningAgent}><BrainCircuit size={16}/> Entrenar Learning Agent</button>}</div>
     </div>
 
-    {sourceId&&<section className="toolPanel radarFeedPanel"><div className="panelTitle"><div><RadioTower size={20}/><div><h2>Posts monitorizados · {selectedSource?.name||"Página"}</h2><p>Usa engagement visible como señal exploratoria; no equivale a alcance ni garantiza rendimiento.</p></div></div><button className="uiBtn uiBtnSecondary" disabled={!selectedSource||syncingId===sourceId} onClick={()=>selectedSource&&void syncWatch(selectedSource)}>{syncingId===sourceId?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>} Sincronizar</button></div><div className="radarPostGrid">{externalPosts.length?externalPosts.map(post=><article className="radarPostCard" key={post.id}><div className="radarPostMeta"><span>{post.posted_at?new Date(post.posted_at).toLocaleDateString("es-MX"):"Fecha no disponible"}</span>{post.post_url&&<a href={post.post_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Ver post</a>}</div><p>{post.text||"Publicación sin copy textual."}</p><div className="radarPostMetrics"><span>👍 {compactNumber(post.reactions)}</span><span>💬 {compactNumber(post.comments)}</span><span>↗ {compactNumber(post.shares)}</span></div><button className="uiBtn uiBtnSmall uiBtnPrimary" disabled={!post.text||analyzing} onClick={()=>void useExternalPost(post)}><Sparkles size={14}/> Analizar este patrón</button></article>):<div className="emptyInline">Todavía no hay posts guardados para esta página. Pulsa <strong>Sincronizar</strong>.</div>}</div></section>}
+    <div className="inspStats cols-3"><Metric label="Páginas vigiladas" value={watchlist.length}/><Metric label="Posts sincronizados" value={externalPosts.length} hint="De la página seleccionada"/><Metric label="Variaciones listas" value={passCount} hint="PASS y novedad ≥ 40%"/></div>
 
-    {analysis&&<section className="toolPanel inspirationAnalysis"><div className="panelTitle"><div><Eye size={20}/><div><h2>Patrón abstraído</h2><p>Esto es lo que utilizaremos como inspiración; no la redacción literal.</p></div></div><button className="uiBtn uiBtnSecondary" onClick={saveReference}><BookmarkPlus size={16}/> Guardar referencia</button></div><blockquote>{analysis.text}</blockquote><div className="analysisChips"><span>{analysis.category}</span><span>{analysis.tone}</span><span>{Math.round((analysis.confidence||0)*100)}% confianza</span></div><div className="patternGrid"><Pattern label="Hook" value={analysis.hook}/><Pattern label="Estructura" value={analysis.structure}/><Pattern label="Tema" value={analysis.theme}/><Pattern label="Mecanismo" value={analysis.mechanism}/></div><p className="analysisSummary">{analysis.summary}</p></section>}
-    {analysis&&<section className="toolPanel variationPanel"><div className="panelTitle actionTitle"><div><Sparkles size={20}/><div><h2>Generar variaciones realmente nuevas</h2><p>Elige cuánto conservar del mecanismo original.</p></div></div><div className="uiActionRow"><select value={mode} onChange={e=>setMode(e.target.value)}><option value="pattern-new-theme">Mismo patrón · tema nuevo</option><option value="same-theme-new-structure">Mismo tema · estructura nueva</option><option value="mechanism-only">Solo mecanismo psicológico</option></select><select value={count} onChange={e=>setCount(Number(e.target.value))}>{[3,6,9,12].map(n=><option value={n} key={n}>{n} textos</option>)}</select><button className="uiBtn uiBtnPrimary" onClick={generate} disabled={generating}>{generating?<Loader2 className="spin" size={16}/>:<Sparkles size={16}/>} Generar</button></div></div>{generationNotice&&<div className={generated.length?"inlineNotice":"inlineNotice warning"}>{generationNotice}{generationProvider&&<span className="generationProvider"> · {generationProvider}</span>}</div>}{generated.length?<><div className="variationList">{generated.map((item,i)=>{const safe=item.compliance?.status==="pass"&&item.novelty>=40;return <article className={safe?"variationCard":"variationCard risky"} key={i}><label className="variationCheck"><input type="checkbox" checked={item.selected} disabled={!safe} onChange={e=>setGenerated(c=>c.map((x,j)=>j===i?{...x,selected:e.target.checked}:x))}/><span/></label><div className="variationBody"><div className="variationBadges"><span className={item.compliance?.status==="pass"?"pass":"warn"}>{item.compliance?.status==="pass"?<ShieldCheck size={13}/>:<AlertTriangle size={13}/>} {String(item.compliance?.status||"review").toUpperCase()}</span><span>{item.novelty}% novedad</span><span>{item.category}</span></div><p>{item.text}</p><small>Conserva: {item.patternKept} · Cambia: {item.changed}</small>{item.novelty<40&&<b className="similarityWarning">Demasiado cercano a una referencia o al dataset; no se puede guardar.</b>}</div></article>})}</div><div className="saveVariationBar"><span>{generated.filter(x=>x.selected).length} seleccionados</span><button className="uiBtn uiBtnPrimary" onClick={saveGenerated} disabled={saving||!generated.some(x=>x.selected)}>{saving?<Loader2 className="spin" size={16}/>:<Check size={16}/>} Guardar textos nuevos</button></div></>:<div className="emptyInline">Todavía no hay variaciones. El Radar prioriza novedad y Compliance antes de dejarlas entrar a tu Biblioteca.</div>}</section>}
-    <section className="toolPanel"><div className="panelTitle"><div><FileText size={20}/><div><h2>Referencias recientes</h2><p>Fuentes externas ya guardadas. Sirven para estudiar patrones, no como ejemplos literales de la Fábrica.</p></div></div></div><div className="referenceGrid">{references.length?references.slice(0,18).map(r=><article key={r.id} className="referenceCard"><div><span>{r.sourcePageName||"Referencia externa"}</span>{r.sourceUrl&&<a href={r.sourceUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/></a>}</div><p>{r.text}</p><small>{r.category} · {r.notes||"Patrón pendiente"}</small><button className="uiBtn uiBtnSmall uiBtnSecondary" onClick={()=>useReference(r)}>Usar patrón</button></article>):<div className="emptyInline">Todavía no hay referencias externas guardadas.</div>}</div></section>
-  </>;
+    {message&&<div className="quickNotice inspNotice" role="status"><Info size={16}/><span>{message}</span></div>}
+
+    <div className="inspColumns">
+      <section className="inspCard">
+        <div className="inspCardHead"><div><h2>Watchlist</h2><p>Páginas públicas de Facebook que quieres vigilar. Sincroniza sus posts cuando lo necesites.</p></div></div>
+        <div className="inspSettingRow">
+          <div><strong>Posts por sincronización</strong><span>Publicaciones recientes que se traen de cada página.</span></div>
+          <div className="segmented compact" role="group" aria-label="Posts por sincronización">{[10,25,50,100].map(n=><button type="button" key={n} className={syncLimit===n?"active":""} onClick={()=>setSyncLimit(n)}>{n}</button>)}</div>
+        </div>
+        {watchlist.length?<ul className="inspWatchList">{watchlist.map(w=><li key={w.id} className={sourceId===w.id?"inspWatch active":"inspWatch"}>
+          <button type="button" className="inspWatchMain" onClick={()=>void selectWatch(w)}>
+            <span className="inspAvatar" aria-hidden="true">{(w.name||"?").charAt(0).toUpperCase()}</span>
+            <span className="inspWatchText"><strong>{w.name}</strong><small>{w.last_synced_at?`Última sincronización: ${new Date(w.last_synced_at).toLocaleString("es-MX",{dateStyle:"medium",timeStyle:"short"})}`:w.notes||"Sin sincronizar"}</small></span>
+          </button>
+          {w.sync_status==="processing"&&<span className="statusPill tone-warning">Procesando</span>}
+          {w.sync_status==="error"&&<span className="statusPill tone-danger" title={w.last_sync_error||undefined}>Error</span>}
+          <div className="inspRowActions">
+            <button type="button" className="uiIconBtn" onClick={()=>void syncWatch(w)} disabled={syncingId===w.id} title="Sincronizar posts públicos" aria-label={`Sincronizar ${w.name}`}>{syncingId===w.id?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>}</button>
+            <a className="uiIconBtn" href={w.page_url} target="_blank" rel="noreferrer" title="Abrir página" aria-label={`Abrir ${w.name}`}><ExternalLink size={16}/></a>
+            <button type="button" className="uiIconBtn danger" onClick={()=>removeWatch(w.id)} title="Eliminar" aria-label={`Eliminar ${w.name}`}><Trash2 size={16}/></button>
+          </div>
+        </li>)}</ul>:<div className="inspEmpty"><BookmarkPlus size={18}/><span>Agrega una página pública para empezar a vigilarla.</span></div>}
+        <div className="inspSubsection">
+          <h3>Agregar página</h3>
+          <div className="inspForm">
+            <div className="fieldRow">
+              <label className="field"><span>Nombre</span><input value={watchName} onChange={e=>setWatchName(e.target.value)} placeholder="Nombre de la página"/></label>
+              <label className="field"><span>URL de la página</span><input value={watchUrl} onChange={e=>setWatchUrl(e.target.value)} placeholder="https://facebook.com/…"/></label>
+            </div>
+            <label className="field"><span>Qué observar <small>Opcional</small></span><input value={watchNotes} onChange={e=>setWatchNotes(e.target.value)} placeholder="Tono, formatos, temas…"/></label>
+            <div className="inspFormActions"><button type="button" className="uiBtn uiBtnSecondary" onClick={addWatch} disabled={!watchName.trim()||!watchUrl.trim()}><Plus size={16}/> Agregar página</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="inspCard">
+        <div className="inspCardHead"><div><h2>Capturar referencia</h2><p>Pega el copy de una publicación o sube una captura para analizar su patrón.</p></div></div>
+        <div className="inspForm">
+          <div className="fieldRow">
+            <label className="field"><span>Fuente</span><select value={sourceId} onChange={e=>{const id=e.target.value;setSourceId(id);const w=watchlist.find(x=>x.id===id);if(w){setSourceUrl(w.page_url);void loadExternalPosts(w.id)}else setExternalPosts([])}}><option value="">Sin Watchlist</option>{watchlist.map(w=><option value={w.id} key={w.id}>{w.name}</option>)}</select></label>
+            <label className="field"><span>URL de la publicación <small>Opcional</small></span><input value={sourceUrl} onChange={e=>setSourceUrl(e.target.value)} placeholder="https://facebook.com/…"/></label>
+          </div>
+          <label className="field"><span>Texto de la publicación</span><textarea className="inspTextarea" value={text} onChange={e=>{setText(e.target.value);setAnalysis(null)}} placeholder="Pega aquí el texto de otra publicación…"/></label>
+          <div className="inspUploadRow">
+            <label className="uiBtn uiBtnSecondary inspFileBtn"><Upload size={16}/> Subir captura<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFile}/></label>
+            {imageDataUrl?<span className="inspAttachment"><ImageIcon size={16}/><span>{imageName}</span><button type="button" onClick={()=>{setImageDataUrl("");setImageName("")}} aria-label="Quitar captura" title="Quitar captura"><X size={14}/></button></span>:<small className="inspHint">JPG, PNG o WebP · máximo 2.5 MB</small>}
+          </div>
+        </div>
+        <div className="inspCardFooter"><button type="button" className={analysis?"uiBtn uiBtnSecondary":"uiBtn uiBtnPrimary"} onClick={analyze} disabled={analyzing||(!text.trim()&&!imageDataUrl)}>{analyzing?<Loader2 className="spin" size={16}/>:<Sparkles size={16}/>} Analizar patrón</button></div>
+      </section>
+    </div>
+
+    {sourceId&&<section className="inspCard">
+      <div className="inspCardHead"><div><h2>Posts de {selectedSource?.name||"la página"}</h2><p>El engagement visible es una señal exploratoria: no equivale a alcance ni garantiza rendimiento.</p></div><div className="inspHeadActions"><button type="button" className="uiBtn uiBtnSecondary" disabled={!selectedSource||syncingId===sourceId} onClick={()=>selectedSource&&void syncWatch(selectedSource)}>{syncingId===sourceId?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>} Sincronizar</button></div></div>
+      {externalPosts.length?<div className="inspPostGrid">{externalPosts.map(post=><article className="inspPost" key={post.id}>
+        <div className="inspPostMeta"><span>{post.posted_at?new Date(post.posted_at).toLocaleDateString("es-MX",{dateStyle:"medium"}):"Fecha no disponible"}</span>{post.post_url&&<a className="linkButton" href={post.post_url} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Ver post</a>}</div>
+        <p className="inspPostText">{post.text||"Publicación sin copy textual."}</p>
+        <div className="inspPostFoot">
+          <div className="inspPostStats"><span title="Reacciones"><ThumbsUp size={14}/>{compactNumber(post.reactions)}</span><span title="Comentarios"><MessageCircle size={14}/>{compactNumber(post.comments)}</span><span title="Compartidos"><Share2 size={14}/>{compactNumber(post.shares)}</span></div>
+          <button type="button" className="uiBtn uiBtnSecondary inspBtnSm" disabled={!post.text||analyzing} onClick={()=>void applyExternalPost(post)}><Sparkles size={14}/> Analizar</button>
+        </div>
+      </article>)}</div>:<div className="inspEmpty"><RadioTower size={18}/><span>Todavía no hay posts guardados para esta página. Pulsa <strong>Sincronizar</strong>.</span></div>}
+    </section>}
+
+    {analysis&&<section className="inspCard">
+      <div className="inspCardHead"><div><h2>Patrón detectado</h2><p>Esto es lo que se usará como inspiración, no la redacción literal.</p></div><div className="inspHeadActions"><button type="button" className="uiBtn uiBtnSecondary" onClick={saveReference}><BookmarkPlus size={16}/> Guardar referencia</button></div></div>
+      <div className="inspAnalysis">
+        <div className="inspTags"><span className="statusPill tone-neutral">{analysis.category}</span><span className="statusPill tone-neutral">{analysis.tone}</span><span className="statusPill tone-neutral">{Math.round((analysis.confidence||0)*100)}% de confianza</span></div>
+        {analysis.summary&&<p className="inspLead">{analysis.summary}</p>}
+        <dl className="inspPatternGrid"><Pattern label="Hook" value={analysis.hook}/><Pattern label="Estructura" value={analysis.structure}/><Pattern label="Tema" value={analysis.theme}/><Pattern label="Mecanismo" value={analysis.mechanism}/></dl>
+        <figure className="inspQuote"><figcaption>Texto analizado</figcaption><blockquote>{analysis.text}</blockquote></figure>
+      </div>
+    </section>}
+
+    {analysis&&<section className="inspCard">
+      <div className="inspCardHead"><div><h2>Generar variaciones</h2><p>Elige cuánto conservar del original. Solo se guardan textos con Compliance PASS y al menos 40% de novedad.</p></div></div>
+      <div className="inspControls">
+        <label className="field"><span>Enfoque</span><select value={mode} onChange={e=>setMode(e.target.value)}><option value="pattern-new-theme">Mismo patrón · tema nuevo</option><option value="same-theme-new-structure">Mismo tema · estructura nueva</option><option value="mechanism-only">Solo mecanismo psicológico</option></select></label>
+        <label className="field"><span>Cantidad</span><select value={count} onChange={e=>setCount(Number(e.target.value))}>{[3,6,9,12].map(n=><option value={n} key={n}>{n} textos</option>)}</select></label>
+        <button type="button" className={generated.length?"uiBtn uiBtnSecondary":"uiBtn uiBtnPrimary"} onClick={generate} disabled={generating}>{generating?<Loader2 className="spin" size={16}/>:<Sparkles size={16}/>} Generar</button>
+      </div>
+      {generationNotice&&<div className={generated.length?"quickNotice inspNotice":"scheduleValidity warn inspNotice"} role="status">{generated.length?<Info size={16}/>:<AlertTriangle size={16}/>}<span>{generationNotice}{generationProvider&&<small className="inspNoticeMeta">{generationProvider}</small>}</span></div>}
+      {generated.length?<>
+        <ul className="inspResults">{generated.map((item,i)=>{const safe=item.compliance?.status==="pass"&&item.novelty>=40;const pass=item.compliance?.status==="pass";return <li className={safe?"inspResult":"inspResult blocked"} key={i}>
+          <input type="checkbox" className="inspCheck" checked={item.selected} disabled={!safe} aria-label={`Seleccionar variación ${i+1}`} onChange={e=>setGenerated(c=>c.map((x,j)=>j===i?{...x,selected:e.target.checked}:x))}/>
+          <div className="inspResultBody">
+            <div className="inspTags"><span className={`statusPill ${pass?"tone-success":"tone-warning"}`}>{pass?<ShieldCheck size={13}/>:<AlertTriangle size={13}/>} {String(item.compliance?.status||"review").toUpperCase()}</span><span className="statusPill tone-neutral">{item.novelty}% novedad</span>{item.category&&<span className="statusPill tone-neutral">{item.category}</span>}</div>
+            <p>{item.text}</p>
+            <small>Conserva: {item.patternKept} · Cambia: {item.changed}</small>
+            {item.novelty<40&&<small className="inspWarnText"><AlertTriangle size={13}/> Demasiado parecido a una referencia o al dataset; no se puede guardar.</small>}
+          </div>
+        </li>})}</ul>
+        <div className="inspCardFooter between"><span className="inspFooterNote">{selectedCount} seleccionados · {passCount} aptos</span><button type="button" className="uiBtn uiBtnPrimary" onClick={saveGenerated} disabled={saving||!generated.some(x=>x.selected)}>{saving?<Loader2 className="spin" size={16}/>:<Check size={16}/>} Guardar textos nuevos</button></div>
+      </>:<div className="inspEmpty"><Sparkles size={18}/><span>Todavía no hay variaciones. El Radar prioriza novedad y Compliance antes de dejarlas entrar a tu Biblioteca.</span></div>}
+    </section>}
+
+    <section className="inspCard">
+      <div className="inspCardHead"><div><h2>Referencias guardadas</h2><p>Fuentes externas para estudiar patrones. No se usan como ejemplos literales en la Fábrica.</p></div></div>
+      {references.length?<div className="inspRefGrid">{references.slice(0,18).map(r=><article key={r.id} className="inspRef">
+        <div className="inspRefTop"><span>{r.sourcePageName||"Referencia externa"}</span>{r.sourceUrl&&<a className="linkButton" href={r.sourceUrl} target="_blank" rel="noreferrer" title="Abrir fuente" aria-label="Abrir fuente"><ExternalLink size={14}/></a>}</div>
+        <p>{r.text}</p>
+        <small>{r.category} · {r.notes||"Patrón pendiente"}</small>
+        <button type="button" className="uiBtn uiBtnSecondary inspBtnSm" onClick={()=>applyReference(r)}>Usar patrón</button>
+      </article>)}</div>:<div className="inspEmpty"><FileText size={18}/><span>Todavía no hay referencias externas guardadas.</span></div>}
+    </section>
+  </div>;
 }
-function Metric({label,value}:{label:string;value:number}){return <article className="opsMetric"><span>{label}</span><strong>{value}</strong></article>}
-function Pattern({label,value}:{label:string;value:string}){return <div className="patternItem"><span>{label}</span><strong>{value||"—"}</strong></div>}
+function Metric({label,value,hint}:{label:string;value:number;hint?:string}){return <div className="inspStat"><span>{label}</span><strong>{value}</strong>{hint&&<small>{hint}</small>}</div>}
+function Pattern({label,value}:{label:string;value:string}){return <div className="inspPatternItem"><dt>{label}</dt><dd>{value||"—"}</dd></div>}

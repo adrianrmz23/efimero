@@ -1,12 +1,14 @@
 "use client";
 
+import { formatPageLabel } from "@/lib/pageLabels";
+
 import { useEffect, useMemo, useState } from "react";
 import { Bookmark, CalendarClock, Loader2, RefreshCw, Send, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
-import { persistWorkingPage, resolveWorkingPageId, WORKING_PAGE_EVENT } from "@/lib/workingPage";
+import { usePages } from "@/lib/pagesContext";
+import { useConfirm } from "@/components/ui/DialogProvider";
 
 type Category={id?:string;name:string;emoji?:string;enabled?:boolean};
 type LibraryItem={text:string;category:string;favorite?:boolean;performanceScore?:number;source?:string};
-type Page={id:string;name:string};
 type Props={
   categories:Category[];
   library:LibraryItem[];
@@ -47,24 +49,30 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
   const [actionBusy,setActionBusy]=useState(false);
   const [notice,setNotice]=useState("");
   const [error,setError]=useState("");
-  const [pages,setPages]=useState<Page[]>([]);
-  const [pageId,setPageId]=useState("");
+  const {pages,activePageId:pageId,setActivePage}=usePages();
+  const confirm=useConfirm();
+  const [pageNiches,setPageNiches]=useState<Record<string,string>>({});
   const [saved,setSaved]=useState<""|"saved"|"favorite">("");
   const [recentGenerated,setRecentGenerated]=useState<string[]>([]);
 
   useEffect(()=>{
-    const onWorkingPage=(event:Event)=>{const value=(event as CustomEvent<{pageId:string}>).detail?.pageId;if(value)setPageId(value)};
-    window.addEventListener(WORKING_PAGE_EVENT,onWorkingPage);
-    fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{const list=d.pages||[];setPages(list);if(list.length)setPageId(resolveWorkingPageId(list,d.activePageId))}).catch(()=>{});
-    return()=>window.removeEventListener(WORKING_PAGE_EVENT,onWorkingPage);
+    fetch("/api/niches",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>{
+      if(d?.experiments)setPageNiches(Object.fromEntries(d.experiments.filter((x:any)=>x.page_id).map((x:any)=>[String(x.page_id),String(x.niche)])));
+    }).catch(()=>{});
   },[]);
   const page=pages.find(x=>x.id===pageId);
+  const activeNiche=pageNiches[pageId]||"";
+  useEffect(()=>{
+    if(activeNiche==="Fe"){setContentFormat("Reflexión de fe");setStyle("Mixto")}
+    else if(activeNiche==="Nostalgia"){setContentFormat("Conversacional breve");setStyle("Nostalgia")}
+    else if(activeNiche==="Humor cotidiano"){setContentFormat("Conversacional breve");setStyle("Humor identificable")}
+  },[activeNiche]);
   const examples=useMemo(()=>library.filter(x=>x.category===category&&x.source!=="reference").sort((a,b)=>Number(b.favorite)-Number(a.favorite)||(b.performanceScore||0)-(a.performanceScore||0)).slice(0,12).map(x=>x.text),[library,category]);
 
   async function generate(){
     setBusy(true);setError("");setNotice("");setSaved("");
     try{
-      const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category,count:1,examples,profile:editorialProfile||null,mode:"quick",interactionStyle:style,contentFormat,objective,recentTexts:recentGenerated})});
+      const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({category,count:1,examples,profile:editorialProfile||null,mode:"quick",interactionStyle:style,contentFormat,objective:activeNiche?`PÁGINA DE NICHO: ${activeNiche}. ${activeNiche==="Fe"?"Crear textos genuinos de fe y esperanza, sin atribuir falsas citas bíblicas ni revelaciones personales.":activeNiche==="Nostalgia"?"Enfocarse en recuerdos específicos y memorias cotidianas, sin reciclar copys ajenos.":activeNiche==="Humor cotidiano"?"Humor original sobre situaciones comunes; sin ataques ni burlas a personas o colectivos.":"Adaptar tono y temática a ese nicho."} Objetivo adicional: ${objective}`:objective,recentTexts:recentGenerated})});
       const d=await r.json();if(!r.ok){const detail=Array.isArray(d.details)&&d.details.length?` ${d.details.join(" · ")}`:"";throw new Error(`${d.error||"No fue posible generar el texto."}${detail}`)}
       const value=String(d.items?.[0]||"").trim();if(!value)throw new Error("El modelo no devolvió una publicación utilizable.");
       setText(value);setRecentGenerated(prev=>[...prev,value].slice(-10));setModel(`${d.model||"IA"}${d.source?` · ${d.source}`:""}`);if(d.warning)setNotice(`Generado con IA secundaria. ${d.warning}`);
@@ -84,21 +92,28 @@ export default function QuickPostStudio({categories,library,editorialProfile,onS
       const check=await fetch("/api/compliance/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});
       const cd=await check.json();const compliance=cd.items?.[0];if(!check.ok||!compliance)throw new Error(cd.error||"No se pudo revisar Compliance.");
       if(compliance.status!=="pass")throw new Error("Este texto necesita revisión antes de publicarse. Prueba otra generación o ajústalo.");
-      if(!window.confirm(`¿Publicar ahora en ${page?.name||"Facebook"}?`))return;
+      if(!await confirm({
+        title:"¿Publicar ahora?",
+        description:`Página: ${page?.name||"Facebook"}\nEl texto pasó Compliance y se publicará de inmediato, sin programación.`,
+        confirmLabel:"Publicar ahora",
+      }))return;
       const r=await fetch("/api/meta/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pageId,message:text,publishNow:true})});
       const d=await r.json();if(!r.ok)throw new Error(d.error||"Meta rechazó la publicación.");setNotice("Publicación enviada a Facebook.");
     }catch(e:any){setError(e?.message||"No fue posible publicar.")}finally{setActionBusy(false)}
   }
 
   return <section className="quickStudio">
-    <div className="quickStudioHeader"><div><span className="overline">GENERADOR RÁPIDO · CHEAPER INFERENCE</span><h1>Una publicación a la vez</h1><p>Genera un copy corto con intención conversacional y decide después si publicarlo, guardarlo, programarlo o descartarlo.</p></div><div className="modelPill"><Sparkles size={16}/><span>{model||"GPT-5.6 Terra"}</span><small>IA real · calidad/costo</small></div></div>
+    <div className="pageIntro quickStudioHeader"><div><span className="overline">GENERADOR RÁPIDO · CHEAPER INFERENCE</span><h1>Una publicación a la vez</h1><p>Genera un copy corto con intención conversacional y decide después si publicarlo, guardarlo, programarlo o descartarlo.</p></div><div className="modelPill"><Sparkles size={16}/><span>{model||"GPT-5.6 Terra"}</span><small>IA real · calidad/costo</small></div></div>
     <div className="quickStudioGrid">
       <div className="quickControls">
+        <div className="fieldRow">
         <label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}>{enabled.map(c=><option key={c.name}>{c.name}</option>)}</select></label>
         <label><span>Formato del copy</span><select value={contentFormat} onChange={e=>setContentFormat(e.target.value)}>{contentFormats.map(([name])=><option key={name}>{name}</option>)}</select><small>{contentFormats.find(x=>x[0]===contentFormat)?.[1]}</small></label>
+        </div>
         <label><span>Tipo de interacción</span><select value={style} onChange={e=>setStyle(e.target.value)}>{styles.map(([name])=><option key={name}>{name}</option>)}</select><small>{contentFormat==="Conversacional breve"?styles.find(x=>x[0]===style)?.[1]:"Se usa como matiz secundario; el formato elegido arriba define la estructura principal."}</small></label>
         <label><span>Qué quieres provocar</span><textarea value={objective} onChange={e=>setObjective(e.target.value)} rows={3}/></label>
-        <label><span>Página para publicar</span><select value={pageId} onChange={e=>{setPageId(e.target.value);void persistWorkingPage(e.target.value)}}><option value="">Selecciona…</option>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><small>Sincronizada con la página activa global.</small></label>
+        {activeNiche&&<div className="quickNicheBadge"><Sparkles size={15}/> Nicho asignado: <strong>{activeNiche}</strong> · guía el prompt de la IA</div>}
+        <label><span>Página para publicar</span><select value={pageId} onChange={e=>void setActivePage(e.target.value)}><option value="">Selecciona…</option>{pages.map(p=><option key={p.id} value={p.id}>{formatPageLabel(p)}</option>)}</select><small>Sincronizada con la página activa global.</small></label>
         <button className="quickGenerate" onClick={generate} disabled={busy}>{busy?<Loader2 className="spin" size={19}/>:text?<RefreshCw size={19}/>:<Sparkles size={19}/>} {busy?"Generando…":text?"Generar otra":"Generar publicación"}</button>
         <div className="qualityNote"><ShieldCheck size={16}/><span>Buscamos conversación natural, no llamadas artificiales a comentar, compartir o reaccionar.</span></div>
       </div>

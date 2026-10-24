@@ -24,6 +24,7 @@ export async function GET() {
             picture: p.picture_url ? { data: { url: p.picture_url } } : undefined,
             tasks: p.tasks || [],
             fan_count: typeof p.fan_count === "number" ? p.fan_count : undefined,
+            followers_count: typeof p.followers_count === "number" ? p.followers_count : undefined,
           })),
         });
       }
@@ -38,15 +39,23 @@ export async function GET() {
     }
     if (fixedToken && fixedId) {
       let page: any = { id: fixedId, name: process.env.META_PAGE_NAME || "Página de Facebook" };
-      try { page = await graphGet(fixedId, { fields: "id,name,category,picture{url},fan_count", access_token: fixedToken }); } catch {}
+      try { page = await graphGet(fixedId, { fields: "id,name,category,picture{url},fan_count,followers_count", access_token: fixedToken }); }
+      catch {try { page = await graphGet(fixedId, { fields: "id,name,category,picture{url},fan_count", access_token: fixedToken }); } catch {}}
       return NextResponse.json({ configured: true, connected: false, mode: "legacy_page_token", pages: [page], activePageId: fixedId });
     }
 
     const accounts = await graphGet("me/accounts", { fields: "id,name,category,picture{url},access_token,tasks", limit: 100, access_token: userToken });
     const pages = await Promise.all((accounts?.data || []).map(async (item:any) => {
       let fan_count:number|undefined;
-      try { const info = await graphGet(String(item.id), { fields: "fan_count", access_token: item.access_token }); fan_count = typeof info?.fan_count === "number" ? info.fan_count : undefined; } catch {}
-      return { id:String(item.id), name:item.name, category:item.category, picture:item.picture, tasks:item.tasks||[], fan_count };
+      let followers_count:number|undefined;
+      try {
+        const info = await graphGet(String(item.id), { fields: "fan_count,followers_count", access_token: item.access_token });
+        fan_count = typeof info?.fan_count === "number" ? info.fan_count : undefined;
+        followers_count = typeof info?.followers_count === "number" ? info.followers_count : undefined;
+      } catch {
+        try { const info = await graphGet(String(item.id), { fields: "fan_count", access_token: item.access_token }); fan_count = typeof info?.fan_count === "number" ? info.fan_count : undefined; } catch {}
+      }
+      return { id:String(item.id), name:item.name, category:item.category, picture:item.picture, tasks:item.tasks||[], fan_count, followers_count };
     }));
     return NextResponse.json({ configured: true, connected: false, mode: "legacy_user_token", pages, activePageId: pages[0]?.id || null });
   } catch (error: any) {

@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Filter, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type Item = { id:string; date:string; time:string; category:string; text:string; status:string; compliance?:any; pageName?:string };
 type Props = { items:Item[]; onChange:(items:Item[])=>void; onOpenCalendar:()=>void };
 
 const statusOrder=["Borrador","Revisión","Aprobado","Programado","Publicado","Error"];
-const statusClass=(value:string)=>value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]/g,"");
+const statusTone:Record<string,string>={Borrador:"neutral",Revisión:"warning",Aprobado:"success",Programado:"accent",Publicado:"muted",Error:"danger"};
 
 export default function TextQueue({items,onChange,onOpenCalendar}:Props){
   const [filter,setFilter]=useState("Pendientes");
@@ -45,14 +45,56 @@ export default function TextQueue({items,onChange,onOpenCalendar}:Props){
     setMessage(`${ids.size} textos aprobados.`);
   }
 
+  const filters=["Pendientes","Aprobado","Programado","Publicado","Error","Todos"];
+  const filterLabel:Record<string,string>={Pendientes:"Pendientes",Aprobado:"Aprobados",Programado:"Programados",Publicado:"Publicados",Error:"Con error",Todos:"Todos"};
+  const filterCount=(value:string)=>value==="Todos"?items.length:value==="Pendientes"?stats.pending:items.filter(x=>x.status===value).length;
+
   return <>
-    <div className="pageIntro"><div><span className="overline">BLOQUE 17 · BANDEJA EDITORIAL</span><h1>Todo texto pasa por una sola cola</h1><p>Revisa, valida Compliance y aprueba copies antes de programarlos. Aquí no se publica nada por accidente.</p></div><button className="uiBtn uiBtnSecondary" onClick={onOpenCalendar}>Abrir calendario</button></div>
-    <div className="opsMetricGrid"><Metric label="Pendientes" value={stats.pending}/><Metric label="Aprobados" value={stats.approved}/><Metric label="Programados" value={stats.scheduled}/><Metric label="Con alerta" value={stats.blocked} danger={stats.blocked>0}/></div>
-    <section className="toolPanel textQueuePanel"><div className="panelTitle actionTitle"><div><ClipboardCheck size={20}/><div><h2>Bandeja de aprobación</h2><p>Máximo 120 elementos visibles para mantener la revisión ligera.</p></div></div><div className="uiActionRow"><button className="uiBtn uiBtnSecondary" onClick={reviewPending} disabled={busy}>{busy?<Loader2 className="spin" size={16}/>:<ShieldCheck size={16}/>} Revisar pendientes</button><button className="uiBtn uiBtnPrimary" onClick={approvePass}><CheckCircle2 size={16}/> Aprobar PASS</button></div></div>
-      {message&&<div className="inlineNotice">{message}</div>}
-      <div className="queueFilters"><Filter size={15}/>{["Pendientes","Aprobado","Programado","Publicado","Error","Todos"].map(x=><button key={x} className={filter===x?"active":""} onClick={()=>setFilter(x)}>{x}</button>)}</div>
-      <div className="queueList">{visible.length?visible.map(item=><article className="queueRow" key={item.id}><div className={`queueStatus ${statusClass(item.status)}`}>{item.status}</div><div className="queueMain"><div className="queueMeta"><span>{item.date} · {item.time}</span><span>{item.category}</span>{item.pageName&&<span>{item.pageName}</span>}</div><p>{item.text}</p><div className="queueCompliance">{item.compliance?.status==="pass"?<><CheckCircle2 size={14}/> Compliance PASS</>:item.compliance?.status?<><AlertTriangle size={14}/> {item.compliance.status}</>:<><Sparkles size={14}/> Sin revisar</>}</div></div><div className="queueActions">{!item.compliance&&<button className="uiIconBtn" title="Revisar Compliance" onClick={()=>reviewOne(item)}><ShieldCheck size={17}/></button>}{item.compliance?.status==="pass"&&item.status!=="Aprobado"&&<button className="uiBtn uiBtnSmall uiBtnPrimary" onClick={()=>patch(item.id,{status:"Aprobado"})}>Aprobar</button>}{statusOrder.includes(item.status)&&<select value={item.status} onChange={e=>patch(item.id,{status:e.target.value})}>{statusOrder.map(s=><option key={s}>{s}</option>)}</select>}</div></article>):<div className="emptyInline">No hay textos para este filtro.</div>}</div>
+    <div className="pageIntro"><div><span className="overline">BANDEJA EDITORIAL</span><h1>Bandeja de revisión</h1><p>Revisa Compliance y aprueba los textos antes de programarlos. Desde aquí no se publica nada.</p></div><button type="button" className="uiBtn uiBtnSecondary" onClick={onOpenCalendar}><CalendarDays size={16}/> Abrir calendario</button></div>
+
+    <div className="calStats" role="list" aria-label="Resumen de la bandeja">
+      <Metric label="Pendientes" value={stats.pending}/>
+      <Metric label="Aprobados" value={stats.approved}/>
+      <Metric label="Programados" value={stats.scheduled}/>
+      <Metric label="Con alerta" value={stats.blocked} danger={stats.blocked>0}/>
+    </div>
+
+    <section className="calPanel" aria-labelledby="calQueueTitle">
+      <div className="calPanelHead">
+        <div><h2 id="calQueueTitle">Textos</h2><p>Se muestran hasta 120 textos para mantener la revisión ligera.</p></div>
+        <div className="calPanelActions">
+          <button type="button" className="uiBtn uiBtnSecondary" onClick={reviewPending} disabled={busy}>{busy?<Loader2 className="spin" size={16}/>:<ShieldCheck size={16}/>} Revisar pendientes</button>
+          <button type="button" className="uiBtn uiBtnPrimary" onClick={approvePass}><CheckCircle2 size={16}/> Aprobar los que pasan</button>
+        </div>
+      </div>
+
+      <div className="calFilterBar">
+        <div className="segmented compact calSegmented" role="tablist" aria-label="Filtrar por estado">
+          {filters.map(x=><button type="button" role="tab" aria-selected={filter===x} key={x} className={filter===x?"active":""} onClick={()=>setFilter(x)}>{filterLabel[x]}<span className="calSegCount">{filterCount(x)}</span></button>)}
+        </div>
+      </div>
+
+      {message&&<div className="quickNotice calNotice" role="status"><Sparkles size={16}/><span>{message}</span></div>}
+
+      <div className="calRows">
+        {visible.length?visible.map(item=>{
+          const c=item.compliance;
+          return <article className="calRow calQueueRow" key={item.id}>
+            <div className="calRowStatus"><span className={`statusPill tone-${statusTone[item.status]||"neutral"}`}>{item.status}</span></div>
+            <div className="calRowMain">
+              <div className="calRowMeta"><span>{item.date} · {item.time}</span><span>{item.category}</span>{item.pageName&&<span>{item.pageName}</span>}</div>
+              <p className="calRowText">{item.text}</p>
+              <div className={`calCompliance ${c?.status==="pass"?"ok":c?.status?"warn":""}`}>{c?.status==="pass"?<><CheckCircle2 size={14}/> Compliance PASS</>:c?.status?<><AlertTriangle size={14}/> Compliance: {c.status}</>:<><ShieldCheck size={14}/> Sin revisar</>}</div>
+            </div>
+            <div className="calRowActions">
+              {!c&&<button type="button" className="uiIconBtn" title="Revisar Compliance" aria-label="Revisar Compliance" onClick={()=>reviewOne(item)}><ShieldCheck size={16}/></button>}
+              {c?.status==="pass"&&item.status!=="Aprobado"&&<button type="button" className="uiBtn uiBtnSecondary calRowApprove" onClick={()=>patch(item.id,{status:"Aprobado"})}><CheckCircle2 size={16}/> Aprobar</button>}
+              {statusOrder.includes(item.status)&&<select className="calRowSelect" aria-label="Cambiar estado" value={item.status} onChange={e=>patch(item.id,{status:e.target.value})}>{statusOrder.map(s=><option key={s}>{s}</option>)}</select>}
+            </div>
+          </article>;
+        }):<div className="calRowsEmpty"><ClipboardCheck size={20}/><strong>No hay textos en este filtro</strong><span>Cambia el filtro o genera contenido nuevo.</span></div>}
+      </div>
     </section>
   </>;
 }
-function Metric({label,value,danger=false}:{label:string;value:number;danger?:boolean}){return <article className={danger?"opsMetric danger":"opsMetric"}><span>{label}</span><strong>{value}</strong></article>}
+function Metric({label,value,danger=false}:{label:string;value:number;danger?:boolean}){return <div className={danger?"calStat danger":"calStat"} role="listitem"><span>{label}</span><strong>{value}</strong></div>}

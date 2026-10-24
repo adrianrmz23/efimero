@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Flame, Gauge, Repeat2, Save, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, Flame, Gauge, Repeat2, Save, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type LibraryItem={id:string;text:string;category:string;createdAt:string;publishedAt?:string;source?:string};
@@ -32,10 +32,23 @@ export default function FatigueRadar({library,schedule}:Props){
     return {sample:all.length,score,level,hooks,categories,duplicates,recommendations};
   },[library,schedule]);
   async function save(){if(!supabase)return;await supabase.from("efimero_fatigue_snapshots").insert({sample_size:analysis.sample,score:analysis.score,snapshot:analysis});setSaved(true);setTimeout(()=>setSaved(false),1800)}
+  const levelTone=analysis.level==="Alta"?"tone-danger":analysis.level==="Media"?"tone-warning":"tone-success";
   return <>
-    <div className="pageIntro"><div><span className="overline">BLOQUE 18 · FATIGA EDITORIAL</span><h1>Detecta cuándo estás diciendo lo mismo</h1><p>Antes de producir más, Efímero mide saturación de categorías, hooks y copias repetidas entre histórico y cola.</p></div><button className="uiBtn uiBtnSecondary" onClick={save}><Save size={16}/>{saved?"Guardado":"Guardar snapshot"}</button></div>
-    <section className="fatigueHero"><div className={`fatigueGauge ${analysis.level.toLowerCase()}`}><Gauge size={28}/><span>Fatiga {analysis.level}</span><strong>{analysis.score}/100</strong><small>{analysis.sample} textos evaluados</small></div><div className="fatigueAdvice"><span className="overline">QUÉ CAMBIAR AHORA</span>{analysis.recommendations.map((r,i)=><p key={i}><Sparkles size={15}/>{r}</p>)}</div></section>
-    <div className="threePanelGrid"><Panel title="Hooks saturados" icon={<Repeat2 size={19}/>} rows={analysis.hooks.map(([k,v])=>[k,v])} empty="Sin aperturas repetidas relevantes."/><Panel title="Categorías dominantes" icon={<Flame size={19}/>} rows={analysis.categories.map(([k,v])=>[k,v])} empty="Sin datos suficientes."/><Panel title="Duplicados exactos" icon={<AlertTriangle size={19}/>} rows={analysis.duplicates.map(([k,v])=>[k.slice(0,52)+(k.length>52?"…":""),v])} empty="No encontramos duplicados exactos."/></div>
+    <div className="pageIntro"><div><span className="overline">INTELIGENCIA</span><h1>Fatiga editorial</h1><p>Detecta cuándo estás diciendo lo mismo. Antes de producir más, mide la saturación de categorías, hooks y copias repetidas entre histórico y cola.</p></div><button className="uiBtn uiBtnSecondary" onClick={save}>{saved?<Check size={16}/>:<Save size={16}/>}{saved?"Guardado":"Guardar snapshot"}</button></div>
+    <div className="setStack">
+      <section className="setCard setSummary">
+        <div>
+          <span className="setScoreLabel">Nivel de fatiga</span>
+          <div className="setScore"><span className="setScoreValue">{analysis.score}<small>/100</small></span><span className={`statusPill ${levelTone}`}>{analysis.level}</span></div>
+          <p className="setHint setHintGap"><Gauge size={13}/> {analysis.sample} textos evaluados</p>
+        </div>
+        <div>
+          <span className="overline">QUÉ CAMBIAR AHORA</span>
+          <ul className="setList">{analysis.recommendations.map((r,i)=><li key={i}><Sparkles size={16}/>{r}</li>)}</ul>
+        </div>
+      </section>
+      <div className="setSplit three"><Panel title="Hooks saturados" icon={<Repeat2 size={18}/>} rows={analysis.hooks.map(([k,v])=>[k,v])} empty="Sin aperturas repetidas relevantes."/><Panel title="Categorías dominantes" icon={<Flame size={18}/>} rows={analysis.categories.map(([k,v])=>[k,v])} empty="Sin datos suficientes."/><Panel title="Duplicados exactos" icon={<AlertTriangle size={18}/>} rows={analysis.duplicates.map(([k,v])=>[k.slice(0,52)+(k.length>52?"…":""),v])} empty="No encontramos duplicados exactos."/></div>
+    </div>
   </>;
 }
-function Panel({title,icon,rows,empty}:{title:string;icon:any;rows:any[];empty:string}){return <section className="toolPanel"><div className="panelTitle"><div>{icon}<div><h2>{title}</h2><p>Señales sobre la muestra activa.</p></div></div></div>{rows.length?<div className="rankList">{rows.map((r,i)=><div className="rankRow" key={`${r[0]}-${i}`}><span>{i+1}</span><p>{r[0]}</p><strong>{r[1]}×</strong></div>)}</div>:<div className="emptyInline">{empty}</div>}</section>}
+function Panel({title,icon,rows,empty}:{title:string;icon:any;rows:any[];empty:string}){return <section className="setCard flush"><div className="setCardHead"><div className="setCardTitle">{icon}<div><h2>{title}</h2><p>Señales sobre la muestra activa.</p></div></div></div>{rows.length?<div className="setRows">{rows.map((r,i)=><div className="setRow" key={`${r[0]}-${i}`}><span className="setIndex">{i+1}</span><div className="setRowMain"><span className="setRowNote setRowNoteStrong">{r[0]}</span></div><span className="setNum">{r[1]}×</span></div>)}</div>:<div className="setEmpty"><span>{empty}</span></div>}</section>}

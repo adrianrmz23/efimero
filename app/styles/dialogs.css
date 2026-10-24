@@ -1,0 +1,66 @@
+/* =====================================================================
+   Diálogos de confirmación y toasts (components/ui/DialogProvider.tsx).
+   Solo tokens --ui-*. z-index por encima de la paleta Ctrl K (200).
+   ===================================================================== */
+.uiDialogBackdrop{
+  position:fixed;inset:0;z-index:300;
+  display:flex;align-items:center;justify-content:center;
+  padding:16px;
+  background:var(--ui-bg);
+  background:color-mix(in srgb,var(--ui-bg) 72%,transparent);
+  animation:uiDialogFade .14s var(--ui-ease);
+}
+.uiDialog{
+  width:100%;max-width:440px;
+  padding:24px;
+  background:var(--ui-surface-2);
+  border:1px solid var(--ui-border-strong);
+  border-radius:var(--ui-r-lg);
+  color:var(--ui-text);
+  font-family:var(--ui-font);
+  animation:uiDialogIn .16s var(--ui-ease);
+}
+.uiDialogTitle{margin:0;font-size:16px;line-height:1.35;font-weight:600;color:var(--ui-text);letter-spacing:0}
+.uiDialogDescription{margin-top:8px;font-size:14px;line-height:1.5;color:var(--ui-text-2);white-space:pre-line;overflow-wrap:anywhere}
+.uiDialogDescription p{margin:0}
+.uiDialogDescription p+p,.uiDialogDescription ul+p,.uiDialogDescription p+ul{margin-top:8px}
+.uiDialogDescription ul{margin:0;padding-left:18px}
+.uiDialogDescription strong{color:var(--ui-text);font-weight:500}
+.uiDialogActions{display:flex;justify-content:flex-end;gap:8px;margin-top:24px}
+.uiDialogActions .uiBtn{cursor:pointer}
+
+/* Variante destructiva del botón principal. */
+.uiDialog .uiBtnPrimary.uiBtnDanger{background:var(--ui-danger)!important;color:var(--ui-bg)!important;border:0!important}
+.uiDialog .uiBtnPrimary.uiBtnDanger:hover{background:var(--ui-danger)!important;opacity:.88}
+.uiDialog .uiBtn:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.uiDialog .uiBtnDanger:focus-visible{outline-color:var(--ui-danger)}
+
+/* Toasts: abajo a la derecha, apilados. */
+.uiToastStack{
+  position:fixed;right:16px;bottom:16px;z-index:310;
+  display:flex;flex-direction:column;align-items:flex-end;gap:8px;
+  max-width:min(380px,calc(100vw - 32px));
+  pointer-events:none;
+}
+.uiToast{
+  pointer-events:auto;cursor:pointer;
+  width:100%;text-align:left;
+  padding:12px 14px;
+  background:var(--ui-surface-3);
+  border:1px solid var(--ui-border-strong);
+  border-radius:var(--ui-r-md);
+  color:var(--ui-text);
+  font:inherit;font-family:var(--ui-font);font-size:13px;line-height:1.45;
+  white-space:pre-line;overflow-wrap:anywhere;
+  animation:uiToastIn .18s var(--ui-ease);
+}
+.uiToast:hover{border-color:var(--ui-text-3)}
+.uiToast-success{border-color:var(--ui-success-border);background:var(--ui-surface-3);box-shadow:inset 3px 0 0 var(--ui-success)}
+.uiToast-error{border-color:var(--ui-danger-border);background:var(--ui-surface-3);box-shadow:inset 3px 0 0 var(--ui-danger)}
+
+@keyframes uiDialogFade{from{opacity:0}to{opacity:1}}
+@keyframes uiDialogIn{from{opacity:0;transform:translateY(4px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes uiToastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .uiDialogBackdrop,.uiDialog,.uiToast{animation:none}
+}

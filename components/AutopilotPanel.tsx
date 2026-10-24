@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { formatPageLabel } from "@/lib/pageLabels";
+
+import { useMemo, useState } from "react";
 import { AlertTriangle, Bot, CalendarClock, CheckCircle2, Loader2, Play, ShieldCheck, Sparkles, WandSparkles } from "lucide-react";
+import { usePages } from "@/lib/pagesContext";
 
 type Props={library:any[];editorialProfile:any;onQueue:(items:any[])=>void};
-type Page={id:string;name:string};
 const pad=(n:number)=>String(n).padStart(2,"0");
 const iso=(d:Date)=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 function timeSlots(start:string,end:string,count:number){const [sh,sm]=start.split(":").map(Number),[eh,em]=end.split(":").map(Number);const a=sh*60+sm,b=eh*60+em;if(count<=1)return [a];const step=(b-a)/(count-1);return Array.from({length:count},(_,i)=>Math.round(a+step*i)).map(m=>`${pad(Math.floor(m/60))}:${pad(m%60)}`)}
 
 export default function AutopilotPanel({library,editorialProfile,onQueue}:Props){
-  const [pages,setPages]=useState<Page[]>([]);const [pageId,setPageId]=useState("");
+  const {pages,activePageId}=usePages();
+  // Selección local: elegir otra página aquí no cambia la página activa global.
+  const [localPageId,setPageId]=useState("");
+  const pageId=localPageId&&pages.some(p=>p.id===localPageId)?localPageId:activePageId;
   const [days,setDays]=useState(7);const [perDay,setPerDay]=useState(6);const [start,setStart]=useState("08:00");const [end,setEnd]=useState("22:00");
   const [mode,setMode]=useState<"manual"|"semi"|"auto">("semi");const [objective,setObjective]=useState("Compartibilidad");const [category,setCategory]=useState("Automática");
   const [busy,setBusy]=useState(false);const [message,setMessage]=useState("");const [error,setError]=useState("");
-  useEffect(()=>{fetch("/api/meta/pages",{cache:"no-store"}).then(r=>r.json()).then(d=>{setPages(d.pages||[]);if(d.pages?.length)setPageId(d.activePageId||d.pages[0].id)}).catch(()=>{})},[]);
   const currentPage=pages.find(p=>p.id===pageId);
   const examples=useMemo(()=>library.filter(x=>x.source!=="reference"&&(!x.sourcePageId||x.sourcePageId===pageId)).sort((a,b)=>(b.performanceScore||0)-(a.performanceScore||0)).slice(0,24).map(x=>({text:x.text,category:x.category,reactions:x.reactions,comments:x.comments,shares:x.shares,performanceScore:x.performanceScore,structure:x.extractionMetadata?.structure,hook:x.extractionMetadata?.hook})),[library,pageId]);
 
@@ -38,24 +42,40 @@ export default function AutopilotPanel({library,editorialProfile,onQueue}:Props)
     }catch(e:any){setError(e?.message||"No fue posible crear el plan.")}finally{setBusy(false)}
   }
 
+  const capacity=Math.min(30,days*perDay);
   return <>
-    <div className="pageIntro"><div><span className="overline">BLOQUE 11 · AUTOPILOT</span><h1>Automatiza la producción, no el criterio</h1><p>Autopilot llena huecos del calendario con textos nuevos, pero Compliance Meta sigue siendo obligatorio en todos los modos.</p></div><div className="autopilotShield"><ShieldCheck size={20}/><span>Compliance obligatorio</span></div></div>
-    <section className="autopilotHero"><div className="autopilotIcon"><Bot size={32}/></div><div><span>FLUJO</span><h2>Huella → Fábrica → Compliance → Calendario → Facebook</h2><p>Ningún texto bloqueado por el agente de políticas puede pasar a publicación.</p></div></section>
-    <section className="toolPanel autopilotPanel">
-      <div className="panelTitle"><div><WandSparkles size={20}/><div><h2>Configura el siguiente lote</h2><p>Para controlar coste y calidad, cada ejecución genera como máximo 30 textos; puedes repetirla para cubrir más semanas.</p></div></div></div>
-      <div className="autopilotGrid">
-        <label><span>Página</span><select value={pageId} onChange={e=>setPageId(e.target.value)}>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-        <label><span>Días</span><select value={days} onChange={e=>setDays(Number(e.target.value))}><option value={3}>3 días</option><option value={7}>7 días</option><option value={14}>14 días</option></select></label>
-        <label><span>Publicaciones/día</span><select value={perDay} onChange={e=>setPerDay(Number(e.target.value))}><option value={3}>3</option><option value={4}>4</option><option value={6}>6</option><option value={8}>8</option></select></label>
-        <label><span>Objetivo</span><select value={objective} onChange={e=>setObjective(e.target.value)}><option>Compartibilidad</option><option>Comentarios</option><option>Equilibrado</option></select></label>
-        <label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}><option>Automática</option><option>Frases identificables</option><option>Relaciones</option><option>Nostalgia</option><option>Humor</option><option>Preguntas</option><option>Vida cotidiana</option></select></label>
-        <label><span>Modo</span><select value={mode} onChange={e=>setMode(e.target.value as any)}><option value="manual">Manual · todo en borrador</option><option value="semi">Semi · aprobados si cumplen</option><option value="auto">Auto · listos para programar si cumplen</option></select></label>
-        <label><span>Primera hora</span><input type="time" value={start} onChange={e=>setStart(e.target.value)}/></label>
-        <label><span>Última hora</span><input type="time" value={end} onChange={e=>setEnd(e.target.value)}/></label>
-      </div>
-      <div className="autopilotRules"><div><ShieldCheck size={18}/><strong>Regla fija</strong><span>Sin CTA directo, engagement bait, clickbait ni incentivos artificiales.</span></div><div><Sparkles size={18}/><strong>Memoria usada</strong><span>{examples.length} referencias propias de {currentPage?.name||"la página"}.</span></div><div><CalendarClock size={18}/><strong>Capacidad</strong><span>{Math.min(30,days*perDay)} textos en esta ejecución.</span></div></div>
-      {(message||error)&&<div className={error?"calendarNotice error":"calendarNotice"}>{error?<AlertTriangle size={17}/>:<CheckCircle2 size={17}/>}<span>{error||message}</span></div>}
-      <button className="generateButton" onClick={buildPlan} disabled={busy||!pageId}>{busy?<Loader2 className="spin" size={20}/>:<Play size={20}/>}<span>{busy?"Construyendo lote…":"Crear lote Autopilot"}</span><small>pasa por Compliance antes de entrar al calendario</small></button>
-    </section>
+    <div className="pageIntro"><div><span className="overline">AUTOMATIZACIÓN</span><h1>Autopilot</h1><p>Llena huecos del calendario con textos nuevos. Automatiza la producción, no el criterio: Compliance Meta revisa cada pieza en todos los modos.</p></div><span className="setBadge"><ShieldCheck size={14}/>Compliance obligatorio</span></div>
+    <div className="setSplit">
+      <section className="setCard">
+        <div className="setCardTitle"><WandSparkles size={18}/><div><h2>Configura el siguiente lote</h2><p>Cada ejecución genera como máximo 30 textos para controlar coste y calidad. Repítela para cubrir más semanas.</p></div></div>
+        <div className="setFields">
+          <label className="setField full"><span>Página</span><select value={pageId} onChange={e=>setPageId(e.target.value)}>{pages.map(p=><option key={p.id} value={p.id}>{formatPageLabel(p)}</option>)}</select></label>
+          <label className="setField"><span>Días</span><select value={days} onChange={e=>setDays(Number(e.target.value))}><option value={3}>3 días</option><option value={7}>7 días</option><option value={14}>14 días</option></select></label>
+          <label className="setField"><span>Publicaciones por día</span><select value={perDay} onChange={e=>setPerDay(Number(e.target.value))}><option value={3}>3</option><option value={4}>4</option><option value={6}>6</option><option value={8}>8</option></select></label>
+          <label className="setField"><span>Objetivo</span><select value={objective} onChange={e=>setObjective(e.target.value)}><option>Compartibilidad</option><option>Comentarios</option><option>Equilibrado</option></select></label>
+          <label className="setField"><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}><option>Automática</option><option>Frases identificables</option><option>Relaciones</option><option>Nostalgia</option><option>Humor</option><option>Preguntas</option><option>Vida cotidiana</option></select></label>
+          <label className="setField full"><span>Modo</span><select value={mode} onChange={e=>setMode(e.target.value as any)}><option value="manual">Manual · todo en borrador</option><option value="semi">Semi · aprobados si cumplen</option><option value="auto">Auto · listos para programar si cumplen</option></select></label>
+          <label className="setField"><span>Primera hora</span><input type="time" value={start} onChange={e=>setStart(e.target.value)}/></label>
+          <label className="setField"><span>Última hora</span><input type="time" value={end} onChange={e=>setEnd(e.target.value)}/></label>
+        </div>
+        {(message||error)&&<div className={error?"setNotice error":"setNotice success"}>{error?<AlertTriangle size={16}/>:<CheckCircle2 size={16}/>}<span>{error||message}</span></div>}
+        <div className="setActions"><button className="uiBtn uiBtnPrimary" onClick={buildPlan} disabled={busy||!pageId}>{busy?<Loader2 className="spin" size={16}/>:<Play size={16}/>} {busy?"Construyendo lote…":"Crear lote"}</button><p className="setHint">Cada texto pasa por Compliance antes de entrar al calendario.</p></div>
+      </section>
+
+      <aside className="setStack setSticky">
+        <section className="setCard">
+          <div className="setCardTitle"><div><h2>Resumen del lote</h2><p>Lo que usará esta ejecución.</p></div></div>
+          <div className="setRowsBox">
+            <div className="setRow top"><CalendarClock size={16}/><div className="setRowMain"><span className="setRowTitle">Capacidad</span><span className="setRowNote">{capacity} textos en esta ejecución</span></div></div>
+            <div className="setRow top"><Sparkles size={16}/><div className="setRowMain"><span className="setRowTitle">Memoria usada</span><span className="setRowNote">{examples.length} referencias propias de {currentPage?.name||"la página"}</span></div></div>
+            <div className="setRow top"><ShieldCheck size={16}/><div className="setRowMain"><span className="setRowTitle">Regla fija</span><span className="setRowNote">Sin CTA directo, engagement bait, clickbait ni incentivos artificiales.</span></div></div>
+          </div>
+        </section>
+        <section className="setCard">
+          <div className="setCardTitle"><Bot size={18}/><div><h2>Flujo</h2><p>Ningún texto bloqueado por el agente de políticas llega a publicación.</p></div></div>
+          <ol className="setSteps"><li>Huella editorial</li><li>Fábrica de textos</li><li>Compliance Meta</li><li>Calendario</li><li>Facebook</li></ol>
+        </section>
+      </aside>
+    </div>
   </>
 }

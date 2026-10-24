@@ -96,11 +96,19 @@ export async function getMetaPages(ownerUserId: string) {
   const admin = getSupabaseAdmin();
   const connection = await getMetaConnection(ownerUserId);
   if (!connection) return { connection: null, pages: [] as any[] };
-  const { data, error } = await admin
+  let { data, error } = await admin
     .from("efimero_meta_pages")
-    .select("id,page_id,page_name,category,picture_url,fan_count,tasks,is_active,updated_at")
+    .select("id,page_id,page_name,category,picture_url,fan_count,followers_count,tasks,is_active,updated_at")
     .eq("connection_id", connection.id)
     .order("page_name", { ascending: true });
+  if (error && (error.code === "42703" || /followers_count/i.test(error.message || ""))) {
+    // Permite entrar a la plataforma aunque todavía falte ejecutar la migración v1.8.
+    const legacy = await admin.from("efimero_meta_pages")
+      .select("id,page_id,page_name,category,picture_url,fan_count,tasks,is_active,updated_at")
+      .eq("connection_id", connection.id).order("page_name", { ascending: true });
+    data = legacy.data as typeof data;
+    error = legacy.error as typeof error;
+  }
   if (error) throw error;
   return { connection, pages: data || [] };
 }
@@ -121,13 +129,21 @@ export async function syncMetaPages(ownerUserId: string, encryptedUserToken?: st
   const pageRows: any[] = [];
   for (const item of accounts?.data || []) {
     let fanCount: number | null = null;
+    let followersCount: number | null = null;
     try {
       const info = await metaGraphGet(String(item.id), {
-        fields: "fan_count",
+        fields: "fan_count,followers_count",
         access_token: item.access_token,
       });
       fanCount = typeof info?.fan_count === "number" ? info.fan_count : null;
-    } catch {}
+      followersCount = typeof info?.followers_count === "number" ? info.followers_count : null;
+    } catch {
+      // Algunas páginas o permisos no ofrecen followers_count; no bloquear el resto de la sincronización.
+      try {
+        const info = await metaGraphGet(String(item.id), {fields:"fan_count",access_token:item.access_token});
+        fanCount = typeof info?.fan_count === "number" ? info.fan_count : null;
+      } catch {}
+    }
     pageRows.push({
       connection_id: connection.id,
       page_id: String(item.id),
@@ -135,6 +151,7 @@ export async function syncMetaPages(ownerUserId: string, encryptedUserToken?: st
       category: item.category || null,
       picture_url: item.picture?.data?.url || null,
       fan_count: fanCount,
+      followers_count: followersCount,
       tasks: Array.isArray(item.tasks) ? item.tasks : [],
       encrypted_page_token: encryptSecret(String(item.access_token)),
       is_active: previousActive ? String(item.id) === previousActive : false,

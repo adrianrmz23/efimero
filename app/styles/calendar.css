@@ -1,0 +1,230 @@
+/* =====================================================================
+   Calendario · Bandeja de revisión · Cola de Facebook
+   Se carga después de ui-system.css. Todas las clases usan el prefijo
+   `cal` para no heredar las reglas antiguas de globals.css.
+   ===================================================================== */
+
+/* --- Encabezado --- */
+.calIntroActions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+/* --- Barra de filtros y acciones (Calendario y Cola de Facebook) --- */
+.calToolbar{display:grid;grid-template-columns:minmax(200px,1.4fr) minmax(140px,1fr) minmax(140px,1fr) auto;gap:16px 20px;align-items:end;margin:0 0 24px;padding:20px 24px;border:1px solid var(--ui-border);border-radius:var(--ui-r-lg);background:var(--ui-surface)}
+.calToolbar label,.calField{display:flex;flex-direction:column;gap:8px;min-width:0;margin:0}
+.calToolbar select,.calField input,.calField textarea{width:100%}
+.calToolbarActions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+
+/* --- Avisos --- */
+.quickNotice.calNotice{align-items:center;margin:0 0 16px}
+.calNotice>svg{margin-top:0}
+.calNotice>span{flex:1;min-width:0}
+.calNoticeClose{flex:0 0 auto;width:28px;height:28px;display:grid;place-items:center;padding:0;border:0;border-radius:6px;background:transparent;color:inherit;opacity:.7}
+.calNoticeClose:hover{opacity:1;background:var(--ui-hover)}
+
+/* --- Navegación de semana --- */
+.calWeekBar{display:flex;align-items:center;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;margin:0 0 16px}
+.calWeekNav{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.calTodayBtn{padding:0 14px}
+.calWeekRange{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-width:0;margin-left:8px}
+.calWeekRange strong{font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--ui-text);white-space:nowrap}
+.calWeekRange span{font-size:13px;color:var(--ui-text-3)}
+.calNow{display:inline-flex;align-items:center;gap:8px;font-size:13px;line-height:1.5;color:var(--ui-text-3)}
+.calNow svg{flex:0 0 auto}
+
+/* --- Calendario vacío --- */
+.calEmpty{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 16px;padding:16px 20px;border:1px dashed var(--ui-border-strong);border-radius:var(--ui-r-lg)}
+.calEmpty>div{flex:1 1 240px;min-width:0}
+.calEmpty strong{display:block;font-size:14px;font-weight:600;color:var(--ui-text)}
+.calEmpty>div>span{display:block;margin-top:4px;font-size:13px;line-height:1.5;color:var(--ui-text-2)}
+.calEmptyIcon{width:36px;height:36px;flex:0 0 auto;display:grid;place-items:center;border-radius:var(--ui-r-sm);background:var(--ui-surface-3);color:var(--ui-text-2)}
+
+/* --- Tablero semanal --- */
+.calBoard{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));overflow:hidden;border:1px solid var(--ui-border);border-radius:var(--ui-r-lg);background:var(--ui-surface)}
+.calDay{display:flex;flex-direction:column;min-width:0;min-height:380px;transition:background .15s var(--ui-ease)}
+.calDay+.calDay{border-left:1px solid var(--ui-border)}
+.calDay.isPast{background:var(--ui-bg)}
+.calDay.isDragOver{background:var(--ui-accent-soft);box-shadow:inset 0 0 0 1px var(--ui-accent-border)}
+.calDayHead{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:12px;border-bottom:1px solid var(--ui-border)}
+.calDayLabel{display:flex;align-items:baseline;gap:6px;min-width:0;margin-right:auto}
+.calDayLabel span{font-size:12px;font-weight:500;color:var(--ui-text-3);text-transform:capitalize}
+.calDayLabel strong{font-size:18px;font-weight:600;line-height:1.2;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ui-text)}
+.calDay.isPast .calDayLabel strong{color:var(--ui-text-3)}
+.calDay.isToday .calDayLabel strong{color:var(--ui-accent)}
+.calDayHead .statusPill[class*="tone-"]{padding:2px 8px}
+.calDayCount{min-width:22px;height:22px;padding:0 6px;display:inline-grid;place-items:center;border-radius:999px;background:var(--ui-surface-3);color:var(--ui-text-2);font-size:12px;font-weight:500;font-variant-numeric:tabular-nums}
+.calDayBody{flex:1;display:flex;flex-direction:column;gap:8px;padding:8px}
+.calDayEmpty{padding:12px 4px;font-size:12px;line-height:1.5;color:var(--ui-text-3);text-align:center}
+
+/* Bloques de publicación */
+.calBlock{position:relative;display:flex;flex-direction:column;gap:6px;min-width:0;padding:10px 10px 10px 12px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-surface-2);cursor:pointer;transition:border-color .15s var(--ui-ease),background .15s var(--ui-ease)}
+.calBlock::before{content:"";position:absolute;left:-1px;top:10px;bottom:10px;width:2px;border-radius:0 2px 2px 0;background:var(--ui-border-strong)}
+.calBlock[data-tone="warning"]::before{background:var(--ui-warning)}
+.calBlock[data-tone="success"]::before{background:var(--ui-success)}
+.calBlock[data-tone="accent"]::before{background:var(--ui-accent)}
+.calBlock[data-tone="danger"]::before{background:var(--ui-danger)}
+.calBlock[data-tone="muted"]::before{background:var(--ui-text-3)}
+.calBlock:hover{border-color:var(--ui-border-strong);background:var(--ui-surface-3)}
+.calBlock.isSelected{border-color:var(--ui-accent-border);background:var(--ui-surface-3)}
+.calBlock.isExpired{border-style:dashed}
+.calBlock:active{cursor:grabbing}
+.calBlockTop{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 6px}
+.calBlockTime{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ui-text)}
+.calBlock .statusPill[class*="tone-"]{padding:2px 8px}
+.calBlockText{margin:0;font-size:13px;line-height:1.45;color:var(--ui-text-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.calBlockMeta{display:flex;align-items:center;gap:4px;min-width:0;font-size:12px;color:var(--ui-text-3)}
+.calBlockMeta svg{flex:0 0 auto}
+.calBlockMeta span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calBlockFlags{display:flex;flex-wrap:wrap;gap:4px 8px}
+.calFlag{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500}
+.calFlag.warn{color:var(--ui-warning)}
+.calFlag.danger{color:var(--ui-danger)}
+
+/* --- Panel lateral de detalle --- */
+.calSheetBackdrop{position:fixed;inset:0;z-index:100;background:color-mix(in srgb,var(--ui-bg) 72%,transparent);animation:uiFade .15s var(--ui-ease)}
+.calSheet{position:fixed;top:0;right:0;bottom:0;z-index:101;width:min(460px,100vw);display:flex;flex-direction:column;border-left:1px solid var(--ui-border-strong);background:var(--ui-surface);animation:calSheetIn .2s var(--ui-ease)}
+@keyframes calSheetIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+.calSheetHead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:24px;border-bottom:1px solid var(--ui-border)}
+.calSheetHead>div{min-width:0}
+.calSheetHead .uiIconBtn{flex:0 0 auto}
+.calSheetDate{display:block;font-size:13px;color:var(--ui-text-3)}
+.calSheetDate::first-letter{text-transform:uppercase}
+.calSheetHead h2{margin:4px 0 0;font-size:18px;font-weight:600;line-height:1.3;letter-spacing:-.01em;color:var(--ui-text)}
+.calSheetTags{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:12px}
+.calTag{display:inline-block;max-width:100%;padding:2px 8px;border:1px solid var(--ui-border-strong);border-radius:999px;font-size:12px;color:var(--ui-text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calSheetBody{flex:1;display:flex;flex-direction:column;gap:16px;overflow-y:auto;padding:24px}
+.calFieldTime input:not([type="checkbox"]):not([type="radio"]):not([type="range"]){max-width:160px}
+.calSheetBody textarea{min-height:240px;resize:vertical;font-size:15px;line-height:1.65}
+.calSheetImage{display:block;align-self:flex-start;max-width:100%;max-height:260px;object-fit:contain;border:1px solid var(--ui-border);border-radius:var(--ui-r-md)}
+.calSheetBody .quickNotice.calNotice{margin:0}
+.calSheetFoot{display:flex;flex-direction:column;gap:12px;padding:16px 24px 24px;border-top:1px solid var(--ui-border);background:var(--ui-surface)}
+.calSheetHint{margin:0;font-size:12px;line-height:1.5;color:var(--ui-text-3)}
+.calSheetPrimary{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.calSheetPrimary .uiBtn{justify-content:center}
+.calSheetSecondary{display:flex;align-items:center;gap:4px}
+.calSheetDelete{margin-left:auto}
+.calSheet .uiIconBtn:disabled{opacity:.5;cursor:not-allowed}
+
+/* --- Bandeja de revisión --- */
+.calStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin:0 0 24px;overflow:hidden;border:1px solid var(--ui-border);border-radius:var(--ui-r-lg);background:var(--ui-border)}
+.calStat{display:flex;flex-direction:column;gap:6px;padding:16px 20px;background:var(--ui-surface)}
+.calStat span{font-size:13px;color:var(--ui-text-2)}
+.calStat strong{font-size:24px;font-weight:600;line-height:1.2;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ui-text)}
+.calStat.danger strong{color:var(--ui-danger)}
+
+.calPanel{padding:24px;border:1px solid var(--ui-border);border-radius:var(--ui-r-lg);background:var(--ui-surface)}
+.calPanelHead{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px 24px;margin:0 0 20px}
+.calPanelHead>div:first-child{flex:1 1 260px;min-width:0}
+.calPanelHead h2{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--ui-text)}
+.calPanelHead p{margin:4px 0 0;font-size:13px;line-height:1.5;color:var(--ui-text-2)}
+.calPanelActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.calFilterBar{max-width:100%;margin:0 0 16px;overflow-x:auto;scrollbar-width:none}
+.calFilterBar::-webkit-scrollbar{display:none}
+.calSegmented{width:max-content}
+.calSegmented button{display:inline-flex;align-items:center;gap:8px}
+.calSegCount{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--ui-text-3)}
+.calSegmented button.active .calSegCount{color:var(--ui-text-2)}
+
+/* Filas con borde */
+.calRows{overflow:hidden;border:1px solid var(--ui-border);border-radius:var(--ui-r-md)}
+.calRow{display:grid;grid-template-columns:112px minmax(0,1fr) auto;align-items:start;gap:16px;padding:16px;transition:background .15s var(--ui-ease)}
+.calRow+.calRow{border-top:1px solid var(--ui-border)}
+.calRow:hover{background:var(--ui-hover)}
+.calRowStatus{padding-top:2px}
+.calRowStatus .statusPill,.calMetaOrigin .statusPill{display:inline-block}
+.calRowMain{display:flex;flex-direction:column;gap:6px;min-width:0}
+.calRowMeta{display:flex;align-items:center;flex-wrap:wrap;gap:4px 0;font-size:12px;line-height:1.5;color:var(--ui-text-3);font-variant-numeric:tabular-nums}
+.calRowMeta span{overflow-wrap:anywhere}
+.calRowMeta span+span::before{content:"·";margin:0 8px}
+.calRowText{margin:0;font-size:14px;line-height:1.55;color:var(--ui-text);white-space:pre-line;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.calCompliance{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--ui-text-3)}
+.calCompliance.ok{color:var(--ui-success)}
+.calCompliance.warn{color:var(--ui-warning)}
+.calRowActions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.calRowSelect{width:148px}
+.calRowsEmpty{display:grid;justify-items:center;gap:6px;padding:40px 16px;text-align:center;color:var(--ui-text-3)}
+.calRowsEmpty strong{margin-top:4px;font-size:14px;font-weight:600;color:var(--ui-text)}
+.calRowsEmpty span{max-width:44ch;font-size:13px;line-height:1.5}
+
+/* --- Cola de Facebook --- */
+.calToolbar.calMetaToolbar{grid-template-columns:minmax(220px,380px) minmax(0,1fr)}
+.calMetaStats{display:flex;justify-content:flex-end;gap:32px}
+.calMetaStats div{display:flex;flex-direction:column;gap:4px;text-align:right}
+.calMetaStats strong{font-size:22px;font-weight:600;line-height:1.2;font-variant-numeric:tabular-nums;color:var(--ui-text)}
+.calMetaStats span{font-size:12px;color:var(--ui-text-3)}
+
+.calPanel.calTable{padding:0;overflow:hidden}
+.calTableHead,.calMetaRow{display:grid;grid-template-columns:18px 168px minmax(0,1fr) 112px 120px;gap:16px;padding:12px 20px}
+.calTableHead{align-items:center;border-bottom:1px solid var(--ui-border);background:var(--ui-surface-2);font-size:12px;font-weight:500;color:var(--ui-text-3)}
+.calTableHeadEnd{text-align:right}
+.calMetaRow{align-items:start;padding:16px 20px;transition:background .15s var(--ui-ease)}
+.calMetaRow+.calMetaRow{border-top:1px solid var(--ui-border)}
+.calMetaRow:hover{background:var(--ui-hover)}
+.calMetaRow.isSelected{background:var(--ui-selected)}
+.calMetaRow>.calCheck{margin-top:2px}
+.calMetaWhen{display:flex;flex-direction:column;gap:2px;min-width:0}
+.calMetaWhen strong{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ui-text)}
+.calMetaWhen span{font-size:12px;line-height:1.5;color:var(--ui-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calMetaWhen span:first-of-type::first-letter{text-transform:uppercase}
+.calMetaBody{display:flex;flex-direction:column;gap:6px;min-width:0}
+.calMetaBody .calRowText{-webkit-line-clamp:2}
+.calMetaOrigin{min-width:0}
+.uiBtn.calCancelBtn{justify-self:end;min-height:32px;padding:0 10px}
+.uiBtn.calCancelBtn:hover:not(:disabled){background:var(--ui-danger-soft)!important;color:var(--ui-danger)!important}
+
+/* Casilla de selección */
+.calCheck{width:18px;height:18px;display:grid;place-items:center;padding:0;border:1px solid var(--ui-border-strong);border-radius:5px;background:transparent;color:var(--ui-bg);cursor:pointer;transition:background .15s var(--ui-ease),border-color .15s var(--ui-ease)}
+.calCheck:hover{border-color:var(--ui-text-3)}
+.calCheck.checked,.calCheck.mixed{border-color:var(--ui-text);background:var(--ui-text)}
+.calCheck:disabled{opacity:.4;cursor:not-allowed}
+
+/* --- Responsive --- */
+@media(max-width:1100px){
+  .calToolbar{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .calToolbarActions{grid-column:1/-1;justify-content:flex-start}
+
+  .calBoard{grid-template-columns:1fr}
+  .calDay{display:grid;grid-template-columns:176px minmax(0,1fr);min-height:0}
+  .calDay+.calDay{border-left:0;border-top:1px solid var(--ui-border)}
+  .calDayHead{align-items:flex-start;align-content:flex-start;padding:16px;border-bottom:0;border-right:1px solid var(--ui-border)}
+  .calDayBody{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));align-content:start;padding:12px}
+  .calDayEmpty{align-self:center;padding:8px 4px;text-align:left}
+
+  .calTableHead,.calMetaRow{grid-template-columns:18px 140px minmax(0,1fr) 104px 112px}
+}
+@media(max-width:720px){
+  .calIntroActions{width:100%}
+  .calIntroActions .uiBtn{flex:1}
+  .calToolbar,.calToolbar.calMetaToolbar{grid-template-columns:1fr;padding:20px}
+  .calToolbarActions .uiBtn{flex:1}
+  .calMetaStats{justify-content:flex-start}
+  .calMetaStats div{text-align:left}
+
+  .calWeekRange{width:100%;margin-left:0}
+  .calDay{grid-template-columns:1fr}
+  .calDayHead{padding:12px 16px;border-right:0;border-bottom:1px solid var(--ui-border)}
+  .calDayBody{grid-template-columns:1fr}
+  .calDayEmpty{text-align:center}
+
+  .calSheetHead,.calSheetBody{padding:20px}
+  .calSheetFoot{padding:16px 20px 20px}
+
+  .calStats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .calPanel{padding:20px}
+  .calPanelActions{width:100%}
+  .calPanelActions .uiBtn{flex:1}
+  .calRow{grid-template-columns:1fr;gap:10px}
+  .calRowActions{justify-content:flex-start;flex-wrap:wrap}
+
+  .calPanel.calTable{padding:0}
+  .calTableHead{grid-template-columns:18px minmax(0,1fr);padding:12px 16px}
+  .calTableHead>span{display:none}
+  .calMetaRow{grid-template-columns:18px minmax(0,1fr);gap:8px 12px;padding:16px}
+  .calMetaWhen,.calMetaBody,.calMetaOrigin,.uiBtn.calCancelBtn{grid-column:2}
+  .uiBtn.calCancelBtn{justify-self:start;margin-left:-10px}
+}
+@media(prefers-reduced-motion:reduce){
+  .calSheet,.calSheetBackdrop{animation:none}
+}
+
+/* Bloques que solo existen en la cola de Facebook: solo lectura, borde punteado. */
+.calBlock.isMeta{cursor:default;border-style:dashed;background:transparent}
+.calBlock.isMeta:hover{transform:none;background:transparent}

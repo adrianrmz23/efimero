@@ -12,10 +12,35 @@ export default function ProductionReadiness(){
     ["Supabase service role",s.serviceRole],["OAuth de Meta",s.metaOauth],["Facebook conectado",s.metaConnected],["Token Meta saludable",s.metaStatus==="connected"],["OpenAI",s.openai],["CheapestInference",s.cheapestInference],["Bright Data Radar",s.brightData],["CRON_SECRET",s.cronSecret],["Sin token manual antiguo",!s.legacyMetaUserToken],
   ] as [string,boolean][];
   const ready=checks.filter(x=>x[1]).length;
+  const percent=Math.round((ready/checks.length)*100);
+  const failedJobs=Number(status.counts?.jobs?.failed||0);
+  const legal=Object.entries(status.legal||{});
   return <>
-    <div className="pageIntro"><div><span className="overline">BLOQUE 24 · PRODUCCIÓN FINAL</span><h1>Que la automatización sea observable</h1><p>Comprueba secretos, Meta, cron, dataset, métricas y páginas legales antes de dejar el sistema trabajando solo.</p></div><button className="uiBtn uiBtnSecondary" onClick={load} disabled={busy}>{busy?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>} Revalidar</button></div>
-    {error&&<div className="calendarNotice error"><AlertTriangle size={17}/>{error}</div>}
-    <div className="productionScore"><ShieldCheck size={28}/><div><span>Preparación operativa</span><strong>{Math.round((ready/checks.length)*100)}%</strong><small>{ready}/{checks.length} controles listos</small></div></div>
-    <div className="productionGrid"><section className="toolPanel"><div className="panelTitle"><div><CheckCircle2 size={20}/><div><h2>Infraestructura</h2><p>Configuración que debe permanecer verde.</p></div></div></div><div className="readinessList">{checks.map(([label,ok])=><div key={label} className={ok?"ready":"notReady"}>{ok?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>}<span>{label}</span><b>{ok?"LISTO":"REVISAR"}</b></div>)}</div></section><section className="toolPanel"><div className="panelTitle"><div><ExternalLink size={20}/><div><h2>Meta legal</h2><p>Estas páginas son públicas y pueden registrarse en Meta Developers.</p></div></div></div><div className="legalLinks">{Object.entries(status.legal||{}).map(([k,v])=><a key={k} href={v} target="_blank" rel="noreferrer">{k}<ExternalLink size={14}/></a>)}</div><div className="productionCounts"><div><span>Dataset</span><strong>{Number(status.counts?.datasetItems||0)}</strong></div><div><span>Snapshots</span><strong>{Number(status.counts?.metricSnapshots||0)}</strong></div><div><span>Jobs fallidos</span><strong>{Number(status.counts?.jobs?.failed||0)}</strong></div></div></section></div>
+    <div className="pageIntro"><div><span className="overline">SISTEMA</span><h1>Producción</h1><p>Que la automatización sea observable: comprueba secretos, Meta, cron, dataset, métricas y páginas legales antes de dejar el sistema trabajando solo.</p></div><button className="uiBtn uiBtnSecondary" onClick={load} disabled={busy}>{busy?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>} Revalidar</button></div>
+    <div className="setStack">
+      {error&&<div className="setNotice error"><AlertTriangle size={16}/><span>{error}</span></div>}
+      <div className="setKpis">
+        <div className={`setKpi ${ready===checks.length?"isSuccess":"isWarning"}`}><span>Preparación operativa</span><strong>{percent}%</strong><small>{ready}/{checks.length} controles listos</small></div>
+        <div className="setKpi"><span>Dataset</span><strong>{Number(status.counts?.datasetItems||0).toLocaleString("es-MX")}</strong></div>
+        <div className="setKpi"><span>Snapshots</span><strong>{Number(status.counts?.metricSnapshots||0).toLocaleString("es-MX")}</strong></div>
+        <div className={failedJobs?"setKpi isDanger":"setKpi"}><span>Jobs fallidos</span><strong>{failedJobs.toLocaleString("es-MX")}</strong></div>
+      </div>
+
+      <div className="setSplit">
+        <section className="setCard flush">
+          <div className="setCardHead"><div className="setCardTitle"><ShieldCheck size={18}/><div><h2>Infraestructura</h2><p>Configuración que debe permanecer en verde.</p></div></div></div>
+          <div className="setRows">{checks.map(([label,ok])=><div className="setRow" key={label}>
+            <span className={`setIconBox ${ok?"success":"warning"}`}>{ok?<CheckCircle2 size={16}/>:<AlertTriangle size={16}/>}</span>
+            <div className="setRowMain"><span className="setRowTitle">{label}</span></div>
+            <span className={`statusPill ${ok?"tone-success":"tone-warning"}`}>{ok?"Listo":"Revisar"}</span>
+          </div>)}</div>
+        </section>
+
+        <section className="setCard flush">
+          <div className="setCardHead"><div className="setCardTitle"><ExternalLink size={18}/><div><h2>Páginas legales</h2><p>Son públicas y puedes registrarlas en Meta Developers.</p></div></div></div>
+          {legal.length?<div className="setRows">{legal.map(([k,v])=><a className="setRow setRowLink" key={k} href={v} target="_blank" rel="noreferrer"><div className="setRowMain"><span className="setRowTitle">{k}</span><span className="setRowNote">{v}</span></div><ExternalLink size={14}/></a>)}</div>:<div className="setEmpty"><ExternalLink size={20}/><strong>Sin páginas registradas</strong><span>Revalida para cargar los enlaces legales.</span></div>}
+        </section>
+      </div>
+    </div>
   </>;
 }

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, BookOpenCheck, BrainCircuit, CheckCircle2, Clock3, Loader2, RefreshCw, Share2, Sparkles, Target, Type, WandSparkles } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { formatPageLabel } from "@/lib/pageLabels";
 
-type PageItem = { id:string; name:string };
+import { useEffect, useMemo, useState } from "react";
+import { BarChart3, BookOpenCheck, BrainCircuit, CheckCircle2, Loader2, Sparkles, Type, WandSparkles } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { usePages } from "@/lib/pagesContext";
+
 type LibraryItem = {
   id:string; text:string; category:string; source?:string; reactions?:number; comments?:number; shares?:number; reach?:number;
   performanceScore?:number; sourcePageId?:string; sourcePageName?:string; publishedAt?:string; extractionMetadata?:Record<string,unknown>;
@@ -32,11 +34,12 @@ function group(items:LibraryItem[],key:(x:LibraryItem)=>string):GroupRow[]{
 const fmt=(n:number)=>new Intl.NumberFormat("es-MX",{maximumFractionDigits:1,notation:n>=1000000?"compact":"standard"}).format(n);
 
 export default function PerformanceLearning({library,onOpenFactory}:Props){
-  const [pages,setPages]=useState<PageItem[]>([]);const [pageId,setPageId]=useState("");const [loadingPages,setLoadingPages]=useState(true);
+  const {pages,activePageId,loading:loadingPages}=usePages();
+  // Selección local: elegir otra página aquí no cambia la página activa global.
+  const [localPageId,setPageId]=useState("");
+  const pageId=localPageId&&pages.some(p=>p.id===localPageId)?localPageId:activePageId;
   const [profile,setProfile]=useState<LearningProfile|null>(null);const [saving,setSaving]=useState(false);const [notice,setNotice]=useState("");
-  useEffect(()=>{void loadPages()},[]);
   useEffect(()=>{try{const raw=localStorage.getItem("efimero_learning_profiles");if(!raw||!pageId)return;const map=JSON.parse(raw);if(map?.[pageId])setProfile(map[pageId])}catch{}},[pageId]);
-  async function loadPages(){setLoadingPages(true);try{const r=await fetch("/api/meta/pages",{cache:"no-store"});const d=await r.json();const list=d.pages||[];setPages(list);if(list.length)setPageId(x=>x||d.activePageId||list[0].id)}finally{setLoadingPages(false)}}
   const page=pages.find(p=>p.id===pageId);
   const owned=useMemo(()=>library.filter(x=>x.text?.trim()&&x.source!=="reference"&&(!pageId||x.sourcePageId===pageId||(!x.sourcePageId&&pages.length===1))),[library,pageId,pages.length]);
   const measured=useMemo(()=>owned.filter(x=>weighted(x)>0),[owned]);
@@ -67,16 +70,29 @@ export default function PerformanceLearning({library,onOpenFactory}:Props){
     if(supabase){setSaving(true);try{await supabase.from("efimero_learning_profiles").insert({page_id:page.id,page_name:page.name,sample_size:next.sampleSize,profile:next,is_active:true})}finally{setSaving(false)}}
   }
 
-  return <>
-    <div className="pageIntro learningIntro"><div><span className="overline">BLOQUE 13 · TEXT LEARNING</span><h1>Aprendizaje por rendimiento</h1><p>Convierte métricas reales en reglas para producir mejores textos. No predice viralidad: identifica patrones observados en tu propio histórico.</p></div><button className="learningPrimary" onClick={analyze} disabled={!pageId||measured.length<3||saving}>{saving?<Loader2 className="spin"/>:<BrainCircuit/>} Analizar aprendizaje</button></div>
-    <section className="learningToolbar"><label><span>Página</span><select value={pageId} onChange={e=>{setPageId(e.target.value);setProfile(null)}} disabled={loadingPages}>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><div><b>{measured.length}</b><span>textos con métricas</span></div><div><b>{owned.length}</b><span>textos de memoria</span></div><button onClick={onOpenFactory}><WandSparkles size={16}/> Abrir Fábrica</button></section>
-    {notice&&<div className="learningNotice"><CheckCircle2 size={17}/>{notice}</div>}
-    {measured.length<3?<section className="emptyState"><BrainCircuit size={42}/><h2>Todavía faltan textos medibles</h2><p>Importa histórico o extrae texto de creatividades en Fábrica. Necesitamos al menos 3 piezas con reacciones, comentarios o compartidos.</p><button onClick={onOpenFactory}><Sparkles size={18}/> Ir a Fábrica</button></section>:<>
-      <div className="learningKpis"><LearningKpi icon={<Activity/>} label="Benchmark" value={benchmark.toFixed(1)} note="señal media ponderada"/><LearningKpi icon={<Share2/>} label="Compartidos" value={fmt(measured.reduce((n,x)=>n+Number(x.shares||0),0))} note="histórico analizado"/><LearningKpi icon={<Type/>} label="Longitud media" value={`${Math.round(measured.reduce((n,x)=>n+words(x.text),0)/measured.length)} pal.`} note="solo textos medibles"/><LearningKpi icon={<Target/>} label="Top quartile" value={profile?profile.topQuartileThreshold.toFixed(1):"—"} note="umbral de la muestra"/></div>
-      <div className="learningGrid"><LearningPanel title="Categorías" icon={<BarChart3/>} rows={categoryRows.slice(0,6)} max={maxAvg}/><LearningPanel title="Longitud" icon={<Type/>} rows={lengthRows} max={maxAvg}/><LearningPanel title="Hooks" icon={<Sparkles/>} rows={hookRows.slice(0,6)} max={maxAvg}/></div>
-      {profile&&<section className="learningProfile"><div className="learningProfileHead"><div><span>PERFIL DE APRENDIZAJE ACTIVO</span><h2>{profile.pageName}</h2><p>{profile.generationInstruction}</p></div><div className="learningStamp"><BookOpenCheck/><span>{profile.sampleSize} piezas</span><small>{new Date(profile.analyzedAt).toLocaleString("es-MX")}</small></div></div><div className="learningRules">{profile.rules.map((r,i)=><article key={i}><i>{String(i+1).padStart(2,"0")}</i><p>{r}</p></article>)}</div></section>}
+  return <div className="ins">
+    <div className="pageIntro"><div><span className="overline">APRENDIZAJE</span><h1>Aprendizaje por rendimiento</h1><p>Convierte métricas reales en reglas para escribir mejores textos. No predice viralidad: resume patrones observados en tu propio histórico.</p></div><button className="uiBtn uiBtnPrimary" onClick={analyze} disabled={!pageId||measured.length<3||saving}>{saving?<Loader2 className="spin" size={16}/>:<BrainCircuit size={16}/>} {profile?"Recalcular aprendizaje":"Analizar aprendizaje"}</button></div>
+    <section className="insToolbar">
+      <label className="insControl insControlWide"><span>Página</span><select value={pageId} onChange={e=>{setPageId(e.target.value);setProfile(null)}} disabled={loadingPages}>{pages.map(p=><option key={p.id} value={p.id}>{formatPageLabel(p)}</option>)}</select></label>
+      <dl className="insInlineStats"><div><dt>Con métricas</dt><dd>{measured.length.toLocaleString("es-MX")}</dd></div><div><dt>En memoria</dt><dd>{owned.length.toLocaleString("es-MX")}</dd></div></dl>
+      <button className="uiBtn uiBtnSecondary" onClick={onOpenFactory}><WandSparkles size={16}/> Abrir Fábrica</button>
+    </section>
+    {notice&&<div className="scheduleValidity ok"><CheckCircle2 size={16}/><span>{notice}</span></div>}
+    {measured.length<3?<section className="insCard"><div className="insEmpty insEmptyLarge"><BrainCircuit size={22}/><strong>Todavía faltan textos medibles</strong><span>Importa histórico o extrae texto de creatividades en Fábrica. Se necesitan al menos 3 piezas con reacciones, comentarios o compartidos.</span><button className="uiBtn uiBtnSecondary" onClick={onOpenFactory}><Sparkles size={16}/> Ir a Fábrica</button></div></section>:<>
+      <section className="insKpis">
+        <Kpi label="Benchmark" value={benchmark.toFixed(1)} note="Señal media ponderada"/>
+        <Kpi label="Compartidos" value={fmt(measured.reduce((n,x)=>n+Number(x.shares||0),0))} note="Histórico analizado"/>
+        <Kpi label="Longitud media" value={`${Math.round(measured.reduce((n,x)=>n+words(x.text),0)/measured.length)} palabras`} note="Solo textos medibles"/>
+        <Kpi label="Umbral top 25%" value={profile?profile.topQuartileThreshold.toFixed(1):"—"} note={profile?"Cuartil superior de la muestra":"Se calcula al analizar"}/>
+      </section>
+      <div className="insGrid3"><LearningPanel title="Categorías" icon={<BarChart3 size={16}/>} rows={categoryRows.slice(0,6)} max={maxAvg}/><LearningPanel title="Longitud" icon={<Type size={16}/>} rows={lengthRows} max={maxAvg}/><LearningPanel title="Inicio del texto" icon={<Sparkles size={16}/>} rows={hookRows.slice(0,6)} max={maxAvg}/></div>
+      {profile&&<section className="insCard">
+        <div className="insCardHead"><div><BookOpenCheck size={16}/><div><h2>Perfil activo · {profile.pageName}</h2><p>{profile.sampleSize} piezas · {new Date(profile.analyzedAt).toLocaleString("es-MX")}</p></div></div><span className="statusPill tone-success">Activo</span></div>
+        <p className="insLead">{profile.generationInstruction}</p>
+        <ol className="insSteps">{profile.rules.map((r,i)=><li key={i}><span>{i+1}</span><p>{r}</p></li>)}</ol>
+      </section>}
     </>}
-  </>;
+  </div>;
 }
-function LearningKpi({icon,label,value,note}:{icon:React.ReactNode;label:string;value:string;note:string}){return <article className="learningKpi"><div>{icon}</div><span>{label}</span><strong>{value}</strong><small>{note}</small></article>}
-function LearningPanel({title,icon,rows,max}:{title:string;icon:React.ReactNode;rows:GroupRow[];max:number}){return <section className="learningPanel"><div className="learningPanelHead"><div>{icon}</div><h3>{title}</h3></div>{rows.map((r,i)=><div className="learningRow" key={r.label}><div><span>{r.label}</span><small>{r.count} piezas</small></div><div className="learningTrack"><i style={{width:`${Math.max(5,(r.avg/max)*100)}%`}}/></div><b>{r.avg.toFixed(1)}</b>{i===0&&<em>señal superior</em>}</div>)}</section>}
+function Kpi({label,value,note}:{label:string;value:string;note:string}){return <div className="insKpi"><span>{label}</span><strong>{value}</strong><small>{note}</small></div>}
+function LearningPanel({title,icon,rows,max}:{title:string;icon:React.ReactNode;rows:GroupRow[];max:number}){return <section className="insCard"><div className="insCardHead"><div>{icon}<div><h2>{title}</h2><p>Señal media por grupo.</p></div></div></div><div className="insBars">{rows.map((r,i)=><div className={i===0?"insBar lead":"insBar"} key={r.label}><div className="insBarLabel"><span>{r.label}</span><small>{r.count} piezas{i===0?" · señal superior":""}</small></div><div className="insBarTrack"><i style={{width:`${Math.max(4,(r.avg/max)*100)}%`}}/></div><strong>{r.avg.toFixed(1)}</strong></div>)}</div></section>}

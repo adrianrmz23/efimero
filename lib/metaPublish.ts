@@ -24,6 +24,8 @@ export type PublishInput={
   scheduledAt?:string;
   publishNow?:boolean;
   scheduledPostId?:string;
+  /** Credencial resuelta de forma segura en el servidor. Nunca desde el body del cliente. */
+  trustedPageToken?:string;
 };
 
 export async function publishToFacebook(input:PublishInput){
@@ -49,7 +51,7 @@ export async function publishToFacebook(input:PublishInput){
     if(target.getTime()<minFuture){const error:any=new Error("La publicación debe programarse al menos 10 minutos después de la hora actual.");error.status=400;throw error;}
   }
 
-  const token=(await resolveAnyStoredPageToken(pageId)).token;
+  const token=input.trustedPageToken || (await resolveAnyStoredPageToken(pageId)).token;
   const scheduleEpoch=scheduledAt?Math.floor(new Date(scheduledAt).getTime()/1000):0;
   let result:any;
   if(imageDataUrl||imageUrl){
@@ -60,7 +62,7 @@ export async function publishToFacebook(input:PublishInput){
     if(!publishNow){form.set("published","false");if(scheduleEpoch)form.set("scheduled_publish_time",String(scheduleEpoch));}
     if(imageDataUrl){
       const parsed=parseDataUrl(imageDataUrl);if(!parsed)throw new Error("La imagen generada no tiene un formato válido.");
-      form.set("source",new Blob([parsed.buffer],{type:parsed.mime}),"efimero.png");
+      form.set("source",new Blob([parsed.buffer],{type:parsed.mime}),parsed.mime==="image/jpeg"?"efimero.jpg":parsed.mime==="image/webp"?"efimero.webp":"efimero.png");
     }else form.set("url",imageUrl);
     result=await postForm(`${pageId}/photos`,form);
   }else{
@@ -80,7 +82,7 @@ export async function publishToFacebook(input:PublishInput){
       meta_post_id:metaPostId,
       published_at_actual:publishNow?new Date().toISOString():null,
       publish_error:null,
-    }).eq("id",input.scheduledPostId);
+    }).eq("id",input.scheduledPostId).eq("page_id",pageId);
   }
   return {ok:true,pageId,publishNow,scheduledAt:scheduledAt||null,id:metaPostId,raw:result};
 }

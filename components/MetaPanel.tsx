@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, CloudDownload, ExternalLink, Loader2, RadioTower, RefreshCw, ShieldCheck, Unplug, Users } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, CloudDownload, ExternalLink, Loader2, MessageCircle, RadioTower, RefreshCw, Share2, ShieldCheck, ThumbsUp, Unplug, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { persistWorkingPage, resolveWorkingPageId } from "@/lib/workingPage";
+import { resolveWorkingPageId } from "@/lib/workingPage";
+import { usePages } from "@/lib/pagesContext";
+import { useConfirm } from "@/components/ui/DialogProvider";
 
-type PageItem = { id:string; name:string; category?:string; fan_count?:number; picture?:{data?:{url?:string}}; tasks?:string[] };
+type PageItem = { id:string; name:string; category?:string; fan_count?:number; followers_count?:number; picture?:{data?:{url?:string}}; tasks?:string[] };
 type MetaPost = { id:string; message:string; createdTime?:string|null; permalinkUrl?:string|null; picture?:string|null; reactions:number; comments:number; shares:number; reach:number };
 type Connection = { connected:boolean; status?:string; facebookUser?:{id:string;name:string}; connectedAt?:string; expiresAt?:string|null; lastVerifiedAt?:string; activePageId?:string|null; pageCount?:number; scopes?:string[] };
 type ImportedItem = {
@@ -34,6 +36,10 @@ export default function MetaPanel({existingPostIds,onImported}:Props){
   const [limit,setLimit]=useState(25);
   const [includeInsights,setIncludeInsights]=useState(false);
   const [selected,setSelected]=useState<string[]>([]);
+  // MetaPanel conserva su propia carga (OAuth, datos extendidos de cada página),
+  // pero avisa al contexto global para que el resto de la app se actualice.
+  const {refresh:refreshSharedPages,setActivePage}=usePages();
+  const confirm=useConfirm();
 
   const currentPage=pages.find(p=>p.id===pageId);
   const importedSet=useMemo(()=>new Set(existingPostIds),[existingPostIds]);
@@ -59,23 +65,28 @@ export default function MetaPanel({existingPostIds,onImported}:Props){
   function connect(){window.location.href="/api/auth/meta/start"}
 
   async function disconnect(){
-    if(!confirm("¿Desconectar Facebook de Efímero Content Engine? Las publicaciones importadas permanecerán en tu Biblioteca."))return;
+    if(!await confirm({
+      title:"¿Desconectar Facebook?",
+      description:`Efímero Content Engine dejará de acceder a ${connection?.facebookUser?.name?`la cuenta de ${connection.facebookUser.name}`:"tu cuenta de Facebook"}${pages.length?` y a sus ${pages.length} páginas`:""}. Las publicaciones importadas permanecerán en tu Biblioteca.`,
+      confirmLabel:"Desconectar",
+      tone:"danger",
+    }))return;
     setSyncing(true);setError("");
-    try{const r=await fetch("/api/meta/connection",{method:"DELETE"});const d=await r.json();if(!r.ok)throw new Error(d.error||"No fue posible desconectar.");setConnection({connected:false});setPages([]);setPageId("");setPosts([]);setMessage("Facebook se desconectó correctamente.")}
+    try{const r=await fetch("/api/meta/connection",{method:"DELETE"});const d=await r.json();if(!r.ok)throw new Error(d.error||"No fue posible desconectar.");setConnection({connected:false});setPages([]);setPageId("");setPosts([]);setMessage("Facebook se desconectó correctamente.");void refreshSharedPages()}
     catch(e:any){setError(e?.message||"No fue posible desconectar Facebook.")}
     finally{setSyncing(false)}
   }
 
   async function syncPages(){
     setSyncing(true);setError("");setMessage("");
-    try{const r=await fetch("/api/meta/sync-pages",{method:"POST"});const d=await r.json();if(!r.ok)throw new Error(d.error||"No fue posible actualizar las páginas.");setMessage(`${d.count||0} páginas sincronizadas.`);await loadConnection()}
+    try{const r=await fetch("/api/meta/sync-pages",{method:"POST"});const d=await r.json();if(!r.ok)throw new Error(d.error||"No fue posible actualizar las páginas.");setMessage(`${d.count||0} páginas sincronizadas.`);await loadConnection();void refreshSharedPages()}
     catch(e:any){setError(e?.message||"No fue posible actualizar las páginas.")}
     finally{setSyncing(false)}
   }
 
   async function choosePage(value:string){
     setPageId(value);setPosts([]);setSelected([]);
-    if(connection?.connected)await persistWorkingPage(value);
+    if(connection?.connected)await setActivePage(value);
   }
 
   async function loadPosts(){
@@ -101,31 +112,70 @@ export default function MetaPanel({existingPostIds,onImported}:Props){
     }catch(e:any){setError(e?.message||"No fue posible guardar la importación.")}finally{setImporting(false)}
   }
 
-  if(loading)return <div className="emptyState"><Loader2 className="spin"/> Comprobando conexión con Facebook…</div>;
+  const intro=<div className="pageIntro"><div><span className="overline">META</span><h1>Conexión con Facebook</h1><p>Conecta tu cuenta una sola vez. Efímero obtiene y cifra los tokens de tus páginas en el servidor; no necesitas Graph API Explorer.</p></div></div>;
+
+  if(loading)return <>
+    {intro}
+    <section className="setCard"><div className="setEmpty"><Loader2 className="spin" size={20}/><strong>Comprobando conexión con Facebook…</strong></div></section>
+  </>;
+
+  const reconnect=connection?.status==="reconnect_required";
+  const audience=(p:PageItem)=>typeof p.followers_count==="number"?`${Intl.NumberFormat("es-MX").format(p.followers_count)} seguidores`:typeof p.fan_count==="number"?`${Intl.NumberFormat("es-MX").format(p.fan_count)} Me gusta`:"Métrica no disponible";
 
   return <>
-    <div className="pageIntro"><div><span className="overline">META CONNECTOR</span><h1>Facebook dentro de Efímero</h1><p>Conecta tu cuenta una sola vez. Efímero obtiene y cifra los tokens de las páginas en el servidor; ya no necesitas usar Graph API Explorer.</p></div></div>
+    {intro}
+    <div className="setStack">
+      {!connection?.connected ? <section className="setCard">
+        <div className="setCardHead">
+          <div className="setIdentity"><span className="setIconBox lg"><RadioTower size={20}/></span><div><div className="setIdentityTitle"><h2>Conecta tus páginas de Facebook</h2><span className="statusPill tone-neutral">Sin conexión</span></div><p>Inicia sesión con Meta, autoriza las páginas que administras y vuelve a Efímero automáticamente.</p></div></div>
+          <button className="uiBtn uiBtnPrimary" onClick={connect}><RadioTower size={16}/> Conectar con Facebook</button>
+        </div>
+        <ul className="setFeatureList"><li><Check size={14}/>Login oficial de Meta</li><li><Check size={14}/>Varias páginas</li><li><Check size={14}/>Tokens cifrados que nunca llegan al navegador</li></ul>
+      </section> : <section className="setCard">
+        <div className="setCardHead">
+          <div className="setIdentity"><span className={`setIconBox lg ${reconnect?"warning":"success"}`}>{reconnect?<AlertTriangle size={20}/>:<CheckCircle2 size={20}/>}</span><div><div className="setIdentityTitle"><h2>{connection.facebookUser?.name||"Cuenta de Facebook"}</h2><span className={`statusPill ${reconnect?"tone-warning":"tone-success"}`}>{reconnect?"Requiere reconexión":"Conectado"}</span></div><p>{reconnect?"Meta pide volver a autorizar la cuenta. Reconecta para seguir publicando.":"Las páginas y sus tokens se gestionan desde el servidor."}</p></div></div>
+          <div className="setCardActions"><button className="uiBtn uiBtnSecondary" onClick={syncPages} disabled={syncing}>{syncing?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>} Actualizar páginas</button><button className="uiBtn uiBtnSecondary" onClick={connect}><RadioTower size={16}/> Reconectar</button><button className="uiBtn uiBtnGhost setDanger" onClick={disconnect}><Unplug size={16}/> Desconectar</button></div>
+        </div>
+        <dl className="setDetails"><div><dt>Páginas disponibles</dt><dd>{connection.pageCount||pages.length}</dd></div><div><dt>Conectado desde</dt><dd>{dateLabel(connection.connectedAt)}</dd></div><div><dt>Token de usuario</dt><dd>{connection?.expiresAt?`Vence ${dateLabel(connection.expiresAt)}`:connection?.connected?"Gestionado":"Legacy"}</dd></div></dl>
+      </section>}
 
-    {!connection?.connected ? <section className="metaConnectHero">
-      <div className="metaConnectIcon"><RadioTower size={28}/></div>
-      <div className="metaConnectCopy"><span className="overline">CONEXIÓN OAUTH</span><h2>Conecta tus páginas de Facebook</h2><p>Inicia sesión con Meta, autoriza las páginas que administras y regresa automáticamente a Efímero. Los tokens se guardan cifrados y nunca se envían al navegador.</p><div className="metaConnectBadges"><span>✓ Login oficial de Meta</span><span>✓ Multipágina</span><span>✓ Tokens cifrados</span></div></div>
-      <button className="uiBtn uiBtnPrimary" onClick={connect}>Conectar con Facebook</button>
-    </section> : <section className={`metaConnectionCard ${connection.status==="reconnect_required"?"warning":""}`}>
-      <div className="metaConnectionIdentity"><div className="metaConnectionIcon">{connection.status==="reconnect_required"?<AlertTriangle/>:<CheckCircle2/>}</div><div><span className="overline">{connection.status==="reconnect_required"?"RECONEXIÓN NECESARIA":"FACEBOOK CONECTADO"}</span><h2>{connection.facebookUser?.name||"Cuenta de Facebook"}</h2><p>{connection.pageCount||pages.length} páginas disponibles · conectado {dateLabel(connection.connectedAt)}</p></div></div>
-      <div className="metaConnectionActions"><button className="uiBtn uiBtnSecondary" onClick={syncPages} disabled={syncing}>{syncing?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>} Actualizar páginas</button><button className="uiBtn uiBtnSecondary" onClick={connect}><RadioTower size={16}/> Reconectar</button><button className="uiBtn uiBtnDanger" onClick={disconnect}><Unplug size={16}/> Desconectar</button></div>
-    </section>}
+      {error&&<div className="setNotice error"><AlertTriangle size={16}/><span>{error}</span></div>}
+      {message&&<div className="setNotice success"><CheckCircle2 size={16}/><span>{message}</span></div>}
 
-    {error&&<div className="alert error"><AlertTriangle size={17}/>{error}</div>}{message&&<div className="alert success"><CheckCircle2 size={17}/>{message}</div>}
+      {pages.length>0&&<div className="setSplit">
+        <section className="setCard flush">
+          <div className="setCardHead"><div className="setCardTitle"><div><h2>Página principal</h2><p>La página elegida queda como selección principal en el resto de la plataforma.</p></div></div><span className="setTag">{pages.length} {pages.length===1?"página":"páginas"}</span></div>
+          <div className="setRows setScroll" role="radiogroup" aria-label="Página principal">
+            {pages.map(p=>{const active=p.id===pageId;return <button type="button" role="radio" aria-checked={active} key={p.id} className={active?"setSelectRow active":"setSelectRow"} onClick={()=>{if(!active)void choosePage(p.id)}}>
+              <span className="setRadio"/>
+              <span className="setIconBox">{p.picture?.data?.url?<img src={p.picture.data.url} alt=""/>:<Users size={16}/>}</span>
+              <span className="setNavCopy"><strong>{p.name}</strong><small>{[p.category,audience(p),`ID …${p.id.slice(-6)}`].filter(Boolean).join(" · ")}</small></span>
+              {active&&<span className="statusPill tone-accent">Principal</span>}
+            </button>})}
+          </div>
+        </section>
 
-    {pages.length>0&&<div className="metaGrid"><section className="panel"><div className="panelHead"><div><h2><CloudDownload/> Importar publicaciones</h2><p>La página elegida queda guardada como selección principal para el resto de la plataforma.</p></div></div>
-      <div className="fieldGrid"><label>Página<select value={pageId} onChange={e=>choosePage(e.target.value)}>{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>Publicaciones<select value={limit} onChange={e=>setLimit(Number(e.target.value))}><option value={10}>10 recientes</option><option value={25}>25 recientes</option><option value={50}>50 recientes</option><option value={100}>100 recientes</option></select></label></div>
-      {currentPage&&<div className="selectedPageMini">{currentPage.picture?.data?.url?<img src={currentPage.picture.data.url} alt=""/>:<Users/>}<div><strong>{currentPage.name}</strong><span>{currentPage.fan_count?`${Intl.NumberFormat("es-MX",{notation:"compact"}).format(currentPage.fan_count)} seguidores`:currentPage.category||"Página de Facebook"}</span></div></div>}
-      <label className="checkRow"><input type="checkbox" checked={includeInsights} onChange={e=>setIncludeInsights(e.target.checked)}/><span>Intentar recuperar métricas adicionales de Insights</span></label>
-      <button className="uiBtn uiBtnPrimary wide" onClick={loadPosts} disabled={loadingPosts}>{loadingPosts?<Loader2 className="spin" size={18}/>:<CloudDownload size={18}/>} Traer publicaciones</button>
-    </section>
+        <section className="setCard setSticky">
+          <div className="setCardTitle"><CloudDownload size={18}/><div><h2>Importar publicaciones</h2><p>Trae publicaciones de {currentPage?.name||"la página principal"} a tu Biblioteca.</p></div></div>
+          <label className="setField"><span>Cantidad</span><select value={limit} onChange={e=>setLimit(Number(e.target.value))}><option value={10}>10 recientes</option><option value={25}>25 recientes</option><option value={50}>50 recientes</option><option value={100}>100 recientes</option></select></label>
+          <label className="setCheckRow"><input type="checkbox" checked={includeInsights} onChange={e=>setIncludeInsights(e.target.checked)}/><span>Intentar recuperar métricas adicionales de Insights</span></label>
+          <button className={`uiBtn ${posts.length?"uiBtnSecondary":"uiBtnPrimary"} wide`} onClick={loadPosts} disabled={loadingPosts}>{loadingPosts?<Loader2 className="spin" size={16}/>:<CloudDownload size={16}/>} Traer publicaciones</button>
+        </section>
+      </div>}
 
-    <section className="panel"><div className="panelHead"><div><h2><ShieldCheck/> Conexión segura</h2><p>Información operativa de esta conexión.</p></div></div><div className="quickStats"><div><span>Páginas</span><strong>{pages.length}</strong></div><div><span>Token usuario</span><strong>{connection?.expiresAt?dateLabel(connection.expiresAt):connection?.connected?"Gestionado":"Legacy"}</strong></div><div><span>Reacciones</span><strong>{totals.reactions.toLocaleString("es-MX")}</strong></div><div><span>Compartidos</span><strong>{totals.shares.toLocaleString("es-MX")}</strong></div></div></section></div>}
+      {posts.length>0&&<section className="setCard flush">
+        <div className="setCardHead">
+          <div className="setCardTitle"><div><h2>Vista previa</h2><p>{newPosts.length} nuevas de {posts.length} cargadas · {totals.reactions.toLocaleString("es-MX")} reacciones · {totals.shares.toLocaleString("es-MX")} compartidos</p></div></div>
+          <div className="setCardActions"><button className="uiBtn uiBtnGhost setSmall" onClick={()=>setSelected(newPosts.map(p=>p.id))}>Seleccionar nuevas</button><button className="uiBtn uiBtnPrimary setSmall" onClick={importSelected} disabled={importing||!selectedPosts.length}>{importing?<Loader2 className="spin" size={16}/>:<CloudDownload size={16}/>} Importar {selectedPosts.length}</button></div>
+        </div>
+        <div className="setRows">{posts.map(post=>{const done=importedSet.has(post.id);return <label className={done?"setPostRow done":"setPostRow"} key={post.id}>
+          <input type="checkbox" disabled={done} checked={selected.includes(post.id)} onChange={()=>setSelected(c=>c.includes(post.id)?c.filter(x=>x!==post.id):[...c,post.id])}/>
+          <div className="setRowMain"><p className="setRowText clamp3">{post.message}</p><div className="setMeta"><span><ThumbsUp size={13}/>{post.reactions.toLocaleString("es-MX")}</span><span><MessageCircle size={13}/>{post.comments.toLocaleString("es-MX")}</span><span><Share2 size={13}/>{post.shares.toLocaleString("es-MX")}</span>{post.createdTime&&<span>{dateLabel(post.createdTime)}</span>}</div></div>
+          <div className="setRowEnd">{done&&<span className="statusPill tone-muted">Importada</span>}{post.permalinkUrl&&<a className="uiIconBtn" href={post.permalinkUrl} target="_blank" rel="noreferrer" aria-label="Abrir en Facebook"><ExternalLink size={15}/></a>}</div>
+        </label>})}</div>
+      </section>}
 
-    {posts.length>0&&<section className="panel metaPostsPanel"><div className="panelHead"><div><h2>Vista previa</h2><p>{newPosts.length} publicaciones nuevas de {posts.length} cargadas.</p></div><div className="rowActions"><button className="uiBtn uiBtnSecondary uiBtnSmall" onClick={()=>setSelected(newPosts.map(p=>p.id))}>Seleccionar nuevas</button><button className="uiBtn uiBtnPrimary uiBtnSmall" onClick={importSelected} disabled={importing||!selectedPosts.length}>{importing?<Loader2 className="spin" size={16}/>:null} Importar {selectedPosts.length}</button></div></div><div className="metaPostList">{posts.map(post=><label className={`metaPostRow ${importedSet.has(post.id)?"alreadyImported":""}`} key={post.id}><input type="checkbox" disabled={importedSet.has(post.id)} checked={selected.includes(post.id)} onChange={()=>setSelected(c=>c.includes(post.id)?c.filter(x=>x!==post.id):[...c,post.id])}/><div className="metaPostText"><p>{post.message}</p><span>👍 {post.reactions.toLocaleString("es-MX")} · 💬 {post.comments.toLocaleString("es-MX")} · ↗ {post.shares.toLocaleString("es-MX")}</span></div>{post.permalinkUrl&&<a href={post.permalinkUrl} target="_blank" rel="noreferrer"><ExternalLink size={16}/></a>}</label>)}</div></section>}
+      <p className="pageFootnote"><ShieldCheck size={14}/>Los tokens de página se guardan cifrados en el servidor y nunca se envían al navegador. Las publicaciones importadas permanecen en tu Biblioteca aunque desconectes Facebook.</p>
+    </div>
   </>;
 }

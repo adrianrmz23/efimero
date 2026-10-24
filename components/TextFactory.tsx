@@ -1,13 +1,15 @@
 "use client";
 
+import { formatPageLabel } from "@/lib/pageLabels";
+
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, Archive, BarChart3, Check, CheckCircle2, Copy, ExternalLink, Eye,
-  Facebook, FileText, Image as ImageIcon, Layers3, Library, Loader2, MessageCircle,
-  RefreshCw, Save, Share2, Sparkles, Target, ThumbsUp, WandSparkles, Zap
+  AlertTriangle, Archive, Check, CheckCircle2, Copy, Eye,
+  Facebook, Image as ImageIcon, Layers3, Library, Loader2,
+  RefreshCw, Save, Share2, ShieldCheck, Sparkles, Target, ThumbsUp, WandSparkles, Zap
 } from "lucide-react";
+import { usePages } from "@/lib/pagesContext";
 
-type PageItem = { id:string; name:string; category?:string; fan_count?:number; picture?:{data?:{url?:string}} };
 type MetaPost = {
   id:string; message:string; createdTime?:string|null; permalinkUrl?:string|null; picture?:string|null;
   reactions:number; comments:number; shares:number; reach:number;
@@ -61,19 +63,21 @@ function factoryAlignment(text:string,category:string,library:LibraryItem[],prof
 }
 
 export default function TextFactory({library,editorialProfile,onSaveItems,onOpenLibrary}:Props){
-  const [pages,setPages]=useState<PageItem[]>([]);
-  const [pageId,setPageId]=useState("");
+  const {pages,activePageId,loading:loadingPages,error:pagesError}=usePages();
+  // Selección local: elegir otra página aquí no cambia la página activa global.
+  const [localPageId,setPageId]=useState("");
+  const pageId=localPageId&&pages.some(p=>p.id===localPageId)?localPageId:activePageId;
   const [posts,setPosts]=useState<MetaPost[]>([]);
   const [postLimit,setPostLimit]=useState(50);
   const [selectedPostIds,setSelectedPostIds]=useState<string[]>([]);
   const [extracted,setExtracted]=useState<Extracted[]>([]);
-  const [loadingPages,setLoadingPages]=useState(true);
   const [loadingPosts,setLoadingPosts]=useState(false);
   const [extracting,setExtracting]=useState(false);
   const [savingExtracted,setSavingExtracted]=useState(false);
   const [generating,setGenerating]=useState(false);
   const [savingGenerated,setSavingGenerated]=useState(false);
-  const [error,setError]=useState("");
+  const [factoryError,setError]=useState("");
+  const error=factoryError||pagesError;
   const [notice,setNotice]=useState("");
   const [category,setCategory]=useState("Automática");
   const [objective,setObjective]=useState("Compartibilidad");
@@ -91,18 +95,7 @@ export default function TextFactory({library,editorialProfile,onSaveItems,onOpen
   const generatedTexts=library.filter(x=>x.source==="generated"&&x.text?.trim()&&(!pageId||!x.sourcePageId||x.sourcePageId===pageId));
   const factoryHistorical=library.filter(x=>x.source==="historical"&&x.extractionMetadata?.method==="vision-ai"&&(!pageId||x.sourcePageId===pageId));
 
-  useEffect(()=>{void loadPages()},[]);
   useEffect(()=>{try{const map=JSON.parse(localStorage.getItem("efimero_learning_profiles")||"{}");setLearningProfile(map?.[pageId]||null)}catch{setLearningProfile(null)}},[pageId]);
-
-  async function loadPages(){
-    setLoadingPages(true);setError("");
-    try{
-      const r=await fetch("/api/meta/pages",{cache:"no-store"});const data=await r.json();
-      if(!r.ok)throw new Error(data.error||"No fue posible consultar tus páginas.");
-      const list=data.pages||[];setPages(list);if(list.length)setPageId(old=>old||data.activePageId||list[0].id);
-    }catch(e:any){setError(e?.message||"No fue posible consultar Meta.")}
-    finally{setLoadingPages(false)}
-  }
 
   async function loadVisualPosts(){
     if(!pageId)return;setLoadingPosts(true);setError("");setNotice("");setExtracted([]);
@@ -184,62 +177,108 @@ export default function TextFactory({library,editorialProfile,onSaveItems,onOpen
 
   function updateGenerated(id:string,text:string){setGenerated(c=>c.map(x=>{if(x.id!==id)return x;const score=factoryAlignment(text,x.category,library,editorialProfile,objective);return {...x,text,alignment:score.alignment,novelty:score.novelty,compliance:undefined}}))}
 
-  return <>
-    <div className="pageIntro factoryIntro">
-      <div><span className="overline">EFÍMERO TEXT INTELLIGENCE</span><h1>Fábrica de textos</h1><p>Convierte creatividades exitosas en memoria editorial y usa sus patrones para producir textos nuevos, medibles y sin copiar publicaciones anteriores.</p></div>
-      <button className="factoryLibraryButton" onClick={onOpenLibrary}><Library size={18}/> Abrir Biblioteca</button>
+  const selectedGenerated=generated.filter(x=>x.selected).length;
+
+  return <div className="studioPage">
+    <div className="pageIntro">
+      <div><span className="overline">FÁBRICA DE TEXTOS</span><h1>Fábrica de textos</h1><p>Convierte tus creatividades con mejor rendimiento en memoria editorial y usa sus patrones para crear textos nuevos, sin copiar publicaciones anteriores.</p></div>
+      <button className="uiBtn uiBtnSecondary" onClick={onOpenLibrary}><Library size={16}/> Abrir biblioteca</button>
     </div>
 
-    <section className="factoryPipeline">
-      <PipelineStep number="01" icon={<Facebook/>} title="Histórico real" note="Posts y métricas" active/>
-      <PipelineStep number="02" icon={<Eye/>} title="Visión IA" note="Lee las imágenes" active={readable.length>0}/>
-      <PipelineStep number="03" icon={<Layers3/>} title="Patrones" note="Tono + estructura" active={factoryHistorical.length>0}/>
-      <PipelineStep number="04" icon={<WandSparkles/>} title="Generación" note="Textos nuevos" active={generated.length>0}/>
-    </section>
+    <ol className="studioSteps" aria-label="Flujo de la fábrica">
+      <FactoryStep number="01" icon={<Facebook size={16}/>} title="Histórico real" value={historicalTexts.length} note="textos propios en memoria" active/>
+      <FactoryStep number="02" icon={<Eye size={16}/>} title="Visión IA" value={factoryHistorical.length} note="visuales con texto extraído" active={readable.length>0}/>
+      <FactoryStep number="03" icon={<Layers3 size={16}/>} title="Patrones" value={topTrainingExamples.length} note="referencias por rendimiento" active={factoryHistorical.length>0}/>
+      <FactoryStep number="04" icon={<WandSparkles size={16}/>} title="Generación" value={generatedTexts.length} note="generados en biblioteca" active={generated.length>0}/>
+    </ol>
 
-    {error&&<div className="factoryNotice error"><AlertTriangle size={18}/><span>{error}</span></div>}
-    {notice&&<div className="factoryNotice success"><CheckCircle2 size={18}/><span>{notice}</span></div>}
+    {error&&<div className="studioNotice error"><AlertTriangle size={16}/><span>{error}</span></div>}
+    {notice&&<div className="studioNotice success"><CheckCircle2 size={16}/><span>{notice}</span></div>}
 
-    <div className="factoryStats">
-      <FactoryStat icon={<ImageIcon/>} label="Visuales analizados" value={factoryHistorical.length} note="con texto extraído"/>
-      <FactoryStat icon={<FileText/>} label="Histórico textual" value={historicalTexts.length} note="memoria propia"/>
-      <FactoryStat icon={<Sparkles/>} label="Generados" value={generatedTexts.length} note="guardados en biblioteca"/>
-      <FactoryStat icon={<Share2/>} label="Top training set" value={topTrainingExamples.length} note="priorizado por rendimiento"/>
-    </div>
-
-    <section className="factorySection">
-      <div className="factorySectionHeader"><div><span>PASO 1</span><h2>Recupera textos desde creatividades</h2><p>Traemos imágenes de una página que administras y la IA lee únicamente el texto visible de la pieza.</p></div><div className="factoryHeaderIcon"><Eye size={24}/></div></div>
-      <div className="factoryControls">
-        <label><span>Página</span><select value={pageId} onChange={e=>{setPageId(e.target.value);setPosts([]);setExtracted([])}} disabled={loadingPages}>{pages.length?pages.map(p=><option value={p.id} key={p.id}>{p.name}</option>):<option>Sin páginas</option>}</select></label>
-        <label><span>Muestra</span><select value={postLimit} onChange={e=>setPostLimit(Number(e.target.value))}><option value={25}>25 posts</option><option value={50}>50 posts</option><option value={100}>100 posts</option></select></label>
-        <button className="factorySecondary" onClick={loadVisualPosts} disabled={!pageId||loadingPosts}>{loadingPosts?<Loader2 className="spin"/>:<RefreshCw/>} {loadingPosts?"Consultando…":"Buscar visuales"}</button>
+    <section className="studioCard">
+      <div className="studioCardHead">
+        <div><span className="studioStepLabel">Paso 1</span><h2>Recupera textos de tus creatividades</h2><p>Traemos las imágenes de una página que administras y la IA lee solo el texto visible de cada pieza.</p></div>
+      </div>
+      <div className="studioToolbar">
+        <label><span>Página</span><select value={pageId} onChange={e=>{setPageId(e.target.value);setPosts([]);setExtracted([])}} disabled={loadingPages}>{pages.length?pages.map(p=><option value={p.id} key={p.id}>{formatPageLabel(p)}</option>):<option>Sin páginas</option>}</select></label>
+        <div className="studioField"><span>Muestra</span><div className="segmented compact" role="group" aria-label="Tamaño de la muestra">{[25,50,100].map(v=><button type="button" key={v} className={postLimit===v?"active":""} onClick={()=>setPostLimit(v)}>{v} posts</button>)}</div></div>
+        <button className="uiBtn uiBtnSecondary" onClick={loadVisualPosts} disabled={!pageId||loadingPosts}>{loadingPosts?<Loader2 className="spin" size={16}/>:<RefreshCw size={16}/>} {loadingPosts?"Consultando…":"Buscar visuales"}</button>
       </div>
 
       {posts.length>0&&<>
-        <div className="factorySampleBar"><div><strong>{visualPosts.length}</strong><span>visuales en la muestra</span></div><div><strong>{selectedPostIds.length}</strong><span>seleccionadas</span></div><div><strong>{readable.length}</strong><span>textos recuperados</span></div><button onClick={selectTopVisuals}><Target size={16}/> Seleccionar top 24</button><button className="factoryPrimary" onClick={extractVisualTexts} disabled={!selectedPosts.length||extracting}>{extracting?<Loader2 className="spin"/>:<Eye/>} {extracting?"Leyendo imágenes…":`Analizar ${selectedPosts.length}`}</button></div>
-        <div className="factoryVisualGrid">{visualPosts.slice(0,32).map(post=>{const ex=extractedMap.get(post.id);const selected=selectedPostIds.includes(post.id);return <article key={post.id} className={`factoryVisualCard ${selected?"selected":""}`}><button className="factoryVisualSelect" onClick={()=>togglePost(post.id)}>{selected?<Check size={14}/>:null}</button>{post.picture?<img src={post.picture} alt="Creatividad de Facebook"/>:<div className="factoryNoImage"><ImageIcon/></div>}<div className="factoryVisualBody"><div className="factoryPostSignals"><span>👍 {fmt(post.reactions)}</span><span>↗ {fmt(post.shares)}</span><b>{performanceScore(post).toFixed(1)}</b></div>{ex?<><span className={`extractConfidence ${ex.confidence>=.8?"high":""}`}>{Math.round(ex.confidence*100)}% lectura</span><p>{ex.text||"Sin texto legible en la creatividad."}</p><small>{ex.category} · {ex.structure}</small></>:<><p className="pendingText">{post.message?.trim()||"Pendiente de lectura visual"}</p><small>{post.createdTime?new Date(post.createdTime).toLocaleDateString("es-MX"):"Facebook"}</small></>}</div></article>})}</div>
-        {readable.length>0&&<div className="factorySaveStrip"><div><Archive size={22}/><span><strong>{readable.length} textos listos para convertir en memoria</strong><small>Se guardan con sus métricas, post original, categoría, hook y estructura.</small></span></div><button onClick={saveExtracted} disabled={savingExtracted}>{savingExtracted?<Loader2 className="spin"/>:<Save/>} Guardar histórico visual</button></div>}
+        <div className="studioSampleBar">
+          <div className="studioInlineStats"><span><b>{visualPosts.length}</b> visuales en la muestra</span><span><b>{selectedPostIds.length}</b> seleccionadas</span><span><b>{readable.length}</b> textos recuperados</span></div>
+          <div className="studioInlineActions"><button type="button" className="linkButton" onClick={selectTopVisuals}><Target size={14}/> Seleccionar top 24</button><button className="uiBtn uiBtnSecondary" onClick={extractVisualTexts} disabled={!selectedPosts.length||extracting}>{extracting?<Loader2 className="spin" size={16}/>:<Eye size={16}/>} {extracting?"Leyendo imágenes…":`Analizar ${selectedPosts.length}`}</button></div>
+        </div>
+        <div className="studioVisualGrid">{visualPosts.slice(0,32).map(post=>{const ex=extractedMap.get(post.id);const selected=selectedPostIds.includes(post.id);return <article key={post.id} className={selected?"studioVisualCard selected":"studioVisualCard"}>
+          <button className="studioCheck" onClick={()=>togglePost(post.id)} aria-pressed={selected} aria-label={selected?"Quitar de la selección":"Seleccionar"}>{selected?<Check size={14}/>:null}</button>
+          {post.picture?<img src={post.picture} alt="Creatividad de Facebook"/>:<div className="studioNoImage"><ImageIcon size={24}/></div>}
+          <div className="studioVisualBody">
+            <div className="studioSignals"><span title="Reacciones"><ThumbsUp size={13}/> {fmt(post.reactions)}</span><span title="Compartidos"><Share2 size={13}/> {fmt(post.shares)}</span><b title="Puntaje de rendimiento">{performanceScore(post).toFixed(1)}</b></div>
+            {ex?<>
+              <span className={`statusPill ${ex.confidence>=.8?"tone-success":"tone-neutral"} studioPillStart`}>{Math.round(ex.confidence*100)}% lectura</span>
+              <p>{ex.text||"Sin texto legible en la creatividad."}</p>
+              <small>{ex.category} · {ex.structure}</small>
+            </>:<>
+              <p className="muted">{post.message?.trim()||"Pendiente de lectura visual"}</p>
+              <small>{post.createdTime?new Date(post.createdTime).toLocaleDateString("es-MX"):"Facebook"}</small>
+            </>}
+          </div>
+        </article>})}</div>
+        {readable.length>0&&<div className="studioCallout"><div><Archive size={18}/><span><strong>{readable.length} textos listos para guardar como memoria</strong><small>Se guardan con sus métricas, el post original, la categoría, el hook y la estructura.</small></span></div><button className="uiBtn uiBtnSecondary" onClick={saveExtracted} disabled={savingExtracted}>{savingExtracted?<Loader2 className="spin" size={16}/>:<Save size={16}/>} Guardar histórico visual</button></div>}
       </>}
     </section>
 
-    <section className="factorySection generatorSection">
-      <div className="factorySectionHeader"><div><span>PASO 2</span><h2>Genera un lote completamente nuevo</h2><p>La IA recibe patrones y ejemplos de alto rendimiento. Los ejemplos enseñan estilo; nunca deben copiarse literalmente.</p></div><div className="factoryHeaderIcon purple"><WandSparkles size={24}/></div></div>
-      <div className="factoryGeneratorGrid">
-        <div className="factoryGeneratorControls">
-          <label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=><option key={c}>{c}</option>)}</select></label>
-          <label><span>Objetivo editorial</span><select value={objective} onChange={e=>setObjective(e.target.value)}><option>Compartibilidad</option><option>Comentarios</option><option>Equilibrado</option></select></label>
-          <label><span>Longitud</span><select value={length} onChange={e=>setLength(e.target.value)}><option>Automática</option><option>Muy corta · 5–12 palabras</option><option>Corta · 13–25 palabras</option><option>Media · 26–45 palabras</option></select></label>
-          <label><span>Cantidad</span><select value={count} onChange={e=>setCount(Number(e.target.value))}><option value={5}>5 textos</option><option value={10}>10 textos</option><option value={20}>20 textos</option><option value={30}>30 textos</option></select></label>
-          <div className="trainingSetCard"><Target size={20}/><div><strong>{topTrainingExamples.length} referencias activas</strong><span>Priorizadas por compartidos, comentarios y reacciones. {learningProfile?"Aprendizaje por rendimiento activo. ":""}{editorialProfile?"La Huella editorial también está activa.":"Puedes crear la Huella para afinar el estilo."}</span></div></div>
-          <button className="factoryGenerateButton" onClick={generateBatch} disabled={generating}>{generating?<Loader2 className="spin" size={20}/>:<Zap size={20}/>} {generating?"Creando lote…":`Generar ${count} textos`}</button>
+    <div className="studioTwoCol">
+      <section className="studioCard studioSticky">
+        <div className="studioCardHead">
+          <div><span className="studioStepLabel">Paso 2</span><h2>Genera un lote nuevo</h2><p>La IA aprende el estilo de tus mejores ejemplos, pero nunca los copia literalmente.</p></div>
         </div>
-        <div className="factoryPrinciples"><span className="factoryPrincipleKicker">GUARDRAILS</span><h3>Fábrica + Compliance Meta</h3><p>Todo lote se filtra antes de mostrarse. Evitamos CTA directo, engagement bait, clickbait e incentivos artificiales. El score de alineación <strong>no predice viralidad</strong>.</p><div><i>01</i><span><b>Compliance</b><small>Bloquea interacción forzada.</small></span></div><div><i>02</i><span><b>Novedad</b><small>Evita clones del histórico.</small></span></div><div><i>03</i><span><b>Huella</b><small>Conserva voz y longitud.</small></span></div></div>
-      </div>
+        <div className="fieldRow">
+          <label><span>Categoría</span><select value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=><option key={c}>{c}</option>)}</select></label>
+          <label><span>Objetivo</span><select value={objective} onChange={e=>setObjective(e.target.value)}><option>Compartibilidad</option><option>Comentarios</option><option>Equilibrado</option></select></label>
+        </div>
+        <label><span>Longitud</span><select value={length} onChange={e=>setLength(e.target.value)}><option>Automática</option><option>Muy corta · 5–12 palabras</option><option>Corta · 13–25 palabras</option><option>Media · 26–45 palabras</option></select></label>
+        <div className="studioField"><span>Cantidad</span><div className="segmented" role="group" aria-label="Cantidad de textos">{[5,10,20,30].map(v=><button type="button" key={v} className={count===v?"active":""} onClick={()=>setCount(v)}>{v}</button>)}</div></div>
+        <div className="studioMeta"><Target size={16}/><div><strong>{topTrainingExamples.length} referencias activas</strong><span>Priorizadas por compartidos, comentarios y reacciones. {learningProfile?"Aprendizaje por rendimiento activo. ":""}{editorialProfile?"La Huella editorial también está activa.":"Crea tu Huella editorial para afinar el estilo."}</span></div></div>
+        <button className={generated.length?"uiBtn uiBtnSecondary wide studioGenerate":"uiBtn uiBtnPrimary wide studioGenerate"} onClick={generateBatch} disabled={generating}>{generating?<Loader2 className="spin" size={16}/>:<Zap size={16}/>} {generating?"Creando lote…":`Generar ${count} textos`}</button>
+        <p className="studioNote"><ShieldCheck size={14}/><span>Cada lote pasa por Compliance Meta antes de mostrarse. El score de alineación no predice viralidad.</span></p>
+      </section>
 
-      {generated.length>0&&<div className="factoryResults"><div className="factoryResultsHeader"><div><span>LOTE GENERADO</span><h3>{generated.length} propuestas para revisar</h3></div><button onClick={saveGenerated} disabled={!generated.some(x=>x.selected)||savingGenerated}>{savingGenerated?<Loader2 className="spin"/>:<Archive/>} Guardar {generated.filter(x=>x.selected).length}</button></div><div className="factoryResultList">{generated.map((item,index)=><article key={item.id} className={item.selected?"factoryResult selected":"factoryResult"}><button className="resultCheck" onClick={()=>setGenerated(c=>c.map(x=>x.id===item.id?{...x,selected:!x.selected}:x))}>{item.selected?<Check/>:null}</button><div className="resultIndex">{String(index+1).padStart(2,"0")}</div><div className="resultMain"><div className="resultMeta"><span>{item.category}</span><b>{item.pattern}</b></div><textarea value={item.text} onChange={e=>updateGenerated(item.id,e.target.value)}/><div className="resultScores"><span className={item.alignment>=85?"strong":""}><Sparkles size={13}/> {item.alignment}% alineación</span><span><Zap size={13}/> {item.novelty}% novedad</span>{item.compliance&&<span className={item.compliance.status==="pass"?"complianceMini pass":"complianceMini review"}>Meta {item.compliance.score}/100</span>}<button onClick={()=>navigator.clipboard?.writeText(item.text)}><Copy size={13}/> Copiar</button></div></div></article>)}</div></div>}
-    </section>
-  </>;
+      {generated.length>0?<section className="studioCard">
+        <div className="studioCardHead">
+          <div><span className="studioStepLabel">Lote generado</span><h2>{generated.length} propuestas para revisar</h2><p>Edita lo que necesites y marca los textos que quieras guardar.</p></div>
+          <button className="uiBtn uiBtnPrimary" onClick={saveGenerated} disabled={!generated.some(x=>x.selected)||savingGenerated}>{savingGenerated?<Loader2 className="spin" size={16}/>:<Archive size={16}/>} Guardar {selectedGenerated}</button>
+        </div>
+        <div className="studioResultList">{generated.map((item,index)=><article key={item.id} className={item.selected?"studioResult selected":"studioResult"}>
+          <button className="studioCheck inline" onClick={()=>setGenerated(c=>c.map(x=>x.id===item.id?{...x,selected:!x.selected}:x))} aria-pressed={item.selected} aria-label={item.selected?"Quitar de la selección":"Seleccionar"}>{item.selected?<Check size={14}/>:null}</button>
+          <div className="studioResultMain">
+            <div className="studioResultMeta"><span className="studioIndex">{String(index+1).padStart(2,"0")}</span><span className="statusPill tone-neutral">{item.category}</span><span>{item.pattern}</span></div>
+            <textarea value={item.text} onChange={e=>updateGenerated(item.id,e.target.value)} aria-label={`Texto ${index+1}`}/>
+            <div className="studioScores">
+              <span className={item.alignment>=85?"good":""}><Sparkles size={13}/> {item.alignment}% alineación</span>
+              <span><Zap size={13}/> {item.novelty}% novedad</span>
+              {item.compliance&&<span className={item.compliance.status==="pass"?"statusPill tone-success":"statusPill tone-warning"}>Meta {item.compliance.score}/100</span>}
+              <button type="button" className="linkButton" onClick={()=>navigator.clipboard?.writeText(item.text)}><Copy size={13}/> Copiar</button>
+            </div>
+          </div>
+        </article>)}</div>
+      </section>:<section className="studioCard studioEmptyCard">
+        <div className="studioEmpty"><WandSparkles size={28}/><strong>Tu lote aparecerá aquí</strong><span>Revisa, edita y guarda en la biblioteca solo los textos que te convenzan.</span></div>
+        <ul className="studioGuardrails">
+          <li><b>Compliance</b><span>Bloquea interacción forzada, clickbait e incentivos artificiales.</span></li>
+          <li><b>Novedad</b><span>Evita clones de tu histórico.</span></li>
+          <li><b>Huella</b><span>Conserva tu voz y la longitud habitual.</span></li>
+        </ul>
+      </section>}
+    </div>
+  </div>;
 }
 
-function PipelineStep({number,icon,title,note,active=false}:{number:string;icon:React.ReactNode;title:string;note:string;active?:boolean}){return <div className={active?"pipelineStep active":"pipelineStep"}><span>{number}</span><div className="pipelineIcon">{icon}</div><div><strong>{title}</strong><small>{note}</small></div></div>}
-function FactoryStat({icon,label,value,note}:{icon:React.ReactNode;label:string;value:number;note:string}){return <article className="factoryStat"><div>{icon}</div><span>{label}</span><strong>{value.toLocaleString("es-MX")}</strong><small>{note}</small></article>}
+function FactoryStep({number,icon,title,value,note,active=false}:{number:string;icon:React.ReactNode;title:string;value:number;note:string;active?:boolean}){
+  return <li className={active?"studioStep active":"studioStep"}>
+    <div className="studioStepTop"><span className="studioStepIcon">{icon}</span><span className="studioStepTitle">{number} · {title}</span>{active&&<Check size={14} className="studioStepCheck" aria-label="Activo"/>}</div>
+    <strong>{value.toLocaleString("es-MX")}</strong>
+    <small>{note}</small>
+  </li>;
+}

@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Check, CheckSquare2, Download, ExternalLink, Film, Loader2, RefreshCw, Square, Trash2, Video } from "lucide-react";
-import { persistWorkingPage, resolveWorkingPageId, WORKING_PAGE_EVENT } from "@/lib/workingPage";
+import { usePages } from "@/lib/pagesContext";
 
-type Page = { id: string; name: string };
 type Reel = { id: string; message: string; createdTime?: string | null; permalinkUrl: string; thumbnail?: string; confirmed: boolean };
 
 function pretty(value?: string | null) {
@@ -15,8 +14,7 @@ function pretty(value?: string | null) {
 function csvCell(value: unknown) { return `"${String(value ?? "").replace(/"/g, '""')}"`; }
 
 export default function ReelManager() {
-  const [pages, setPages] = useState<Page[]>([]);
-  const [pageId, setPageId] = useState("");
+  const { pages, activePageId: pageId, setActivePage } = usePages();
   const [reels, setReels] = useState<Reel[]>([]);
   const [ambiguous, setAmbiguous] = useState<Reel[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -29,17 +27,6 @@ export default function ReelManager() {
   const [scanned, setScanned] = useState(0);
   const page = pages.find(x => x.id === pageId);
   const sorted = useMemo(() => [...reels].sort((a, b) => new Date(b.createdTime || 0).getTime() - new Date(a.createdTime || 0).getTime()), [reels]);
-
-  useEffect(() => {
-    const handler = (event: Event) => { const id = (event as CustomEvent<{ pageId: string }>).detail?.pageId; if (id) setPageId(id); };
-    window.addEventListener(WORKING_PAGE_EVENT, handler);
-    fetch("/api/meta/pages", { cache: "no-store" }).then(r => r.json()).then(data => {
-      const list = data.pages || [];
-      setPages(list);
-      if (list.length) setPageId(resolveWorkingPageId(list, data.activePageId));
-    }).catch(() => {});
-    return () => window.removeEventListener(WORKING_PAGE_EVENT, handler);
-  }, []);
 
   useEffect(() => { if (pageId) void load(true); }, [pageId, days]);
 
@@ -107,34 +94,53 @@ export default function ReelManager() {
     finally { setDeleting(false); }
   }
 
-  return <>
-    <div className="pageIntro reelManagerIntro"><div><span className="overline">GESTOR DE REELS</span><h1>Revisa y limpia tus Reels desde un solo lugar</h1><p>Efímero consulta las publicaciones de la página y solo habilita borrado masivo para elementos que puede confirmar como Reel.</p></div><div className="uiActionRow"><button className="uiBtn uiBtnSecondary" onClick={exportCsv} disabled={!sorted.length}><Download size={16}/> Exportar CSV</button><button className="uiBtn uiBtnSecondary" onClick={() => void load(true)} disabled={loading || deleting}>{loading ? <Loader2 className="spin" size={16}/> : <RefreshCw size={16}/>} Actualizar</button></div></div>
+  const periods: Array<[string, string]> = [["30", "30 días"], ["90", "90 días"], ["365", "1 año"], ["0", "Todo"]];
+  const allSelected = !!sorted.length && selected.size === sorted.length;
 
-    <div className="reelManagerWarning"><AlertTriangle size={18}/><p><strong>Antes de borrar:</strong> guarda una copia de la lista y revisa el motivo de la suspensión de monetización. Eliminar Reels no garantiza que Meta reactive la monetización.</p></div>
+  return <div className="studioPage">
+    <div className="pageIntro"><div><span className="overline">GESTOR DE REELS</span><h1>Gestor de Reels</h1><p>Revisa los Reels de tu página y elimínalos en bloque. Solo se pueden seleccionar los elementos que Efímero confirma como Reel.</p></div><div className="studioHeaderActions"><button className="uiBtn uiBtnGhost" onClick={exportCsv} disabled={!sorted.length}><Download size={16}/> Exportar CSV</button><button className="uiBtn uiBtnSecondary" onClick={() => void load(true)} disabled={loading || deleting}>{loading ? <Loader2 className="spin" size={16}/> : <RefreshCw size={16}/>} Actualizar</button></div></div>
 
-    <section className="toolPanel reelManagerToolbar">
-      <label><span>Página</span><select value={pageId} onChange={e => { setPageId(e.target.value); void persistWorkingPage(e.target.value); }}><option value="">Selecciona…</option>{pages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-      <label><span>Periodo</span><select value={days} onChange={e => setDays(e.target.value)}><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option><option value="0">Todo lo disponible</option></select></label>
-      <div className="reelManagerStats"><div><strong>{sorted.length}</strong><span>Reels confirmados</span></div><div><strong>{selected.size}</strong><span>seleccionados</span></div><div><strong>{scanned}</strong><span>posts revisados</span></div></div>
-      {!!sorted.length && <div className="uiActionRow"><button className="uiBtn uiBtnSecondary" onClick={toggleAll}>{selected.size === sorted.length ? <CheckSquare2 size={16}/> : <Square size={16}/>} {selected.size === sorted.length ? "Quitar selección" : "Seleccionar visibles"}</button><button className="uiBtn uiBtnDanger" onClick={() => void deleteSelected()} disabled={!selected.size || deleting}>{deleting ? <Loader2 className="spin" size={16}/> : <Trash2 size={16}/>} Eliminar seleccionados</button></div>}
+    <div className="studioNotice warn"><AlertTriangle size={16}/><span><strong>Antes de borrar:</strong> exporta una copia de la lista y revisa el motivo de la suspensión de monetización. Eliminar Reels no garantiza que Meta la reactive.</span></div>
+
+    <section className="studioCard studioReelToolbar" aria-label="Filtros">
+      <label><span>Página</span><select value={pageId} onChange={e => { void setActivePage(e.target.value); }}><option value="">Selecciona…</option>{pages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+      <div className="studioField"><span>Periodo</span><div className="segmented compact studioSegmented" role="group" aria-label="Periodo">{periods.map(([value, label]) => <button type="button" key={value} className={days === value ? "active" : ""} onClick={() => setDays(value)}>{label}</button>)}</div></div>
+      <dl className="studioReelStats"><div><dt>Reels confirmados</dt><dd>{sorted.length}</dd></div><div><dt>Seleccionados</dt><dd>{selected.size}</dd></div><div><dt>Posts revisados</dt><dd>{scanned}</dd></div></dl>
     </section>
 
-    {(error || notice) && <div className={error ? "inlineNotice error" : "inlineNotice"}>{error || notice}</div>}
+    {(error || notice) && <div className={error ? "studioNotice error" : "studioNotice success"}>{error ? <AlertTriangle size={16}/> : <Check size={16}/>}<span>{error || notice}</span></div>}
 
-    <section className="reelGrid">
-      {loading && !sorted.length ? <div className="reelEmpty"><Loader2 className="spin" size={28}/><strong>Buscando Reels…</strong><span>Estamos revisando publicaciones de {page?.name || "la página"}.</span></div> : sorted.length ? sorted.map(item => {
+    {!!sorted.length && <div className="studioListHead">
+      <button type="button" className="linkButton" onClick={toggleAll}>{allSelected ? <CheckSquare2 size={16}/> : <Square size={16}/>} {allSelected ? "Quitar selección" : "Seleccionar visibles"}</button>
+      <span>{sorted.length} {sorted.length === 1 ? "Reel" : "Reels"} · del más reciente al más antiguo</span>
+    </div>}
+
+    <section className="studioReelGrid">
+      {loading && !sorted.length ? <div className="studioEmpty studioEmptyBox"><Loader2 className="spin" size={28}/><strong>Buscando Reels…</strong><span>Revisando las publicaciones de {page?.name || "la página"}.</span></div> : sorted.length ? sorted.map(item => {
         const checked = selected.has(item.id);
-        return <article className={checked ? "reelCard selected" : "reelCard"} key={item.id}>
-          <button className="reelSelect" onClick={() => toggle(item.id)} aria-label={checked ? "Quitar selección" : "Seleccionar"}>{checked ? <Check size={16}/> : <span/>}</button>
-          <div className="reelThumb">{item.thumbnail ? <img src={item.thumbnail} alt="Miniatura del Reel"/> : <Video size={32}/>}<span><Film size={14}/> Reel confirmado</span></div>
-          <div className="reelBody"><small>{pretty(item.createdTime)}</small><p>{item.message || "Reel sin texto"}</p><code>{item.id}</code></div>
-          <a className="uiBtn uiBtnSecondary reelOpen" href={item.permalinkUrl} target="_blank" rel="noreferrer"><ExternalLink size={15}/> Ver en Facebook</a>
+        return <article className={checked ? "studioReelCard selected" : "studioReelCard"} key={item.id}>
+          <div className="studioReelThumb">
+            {item.thumbnail ? <img src={item.thumbnail} alt="Miniatura del Reel"/> : <Video size={28}/>}
+            <button className="studioCheck" onClick={() => toggle(item.id)} aria-pressed={checked} aria-label={checked ? "Quitar selección" : "Seleccionar"}>{checked ? <Check size={14}/> : null}</button>
+            <span className="studioReelBadge"><Film size={12}/> Reel</span>
+          </div>
+          <div className="studioReelBody">
+            <small>{pretty(item.createdTime)}</small>
+            <p className={item.message ? "" : "muted"}>{item.message || "Reel sin texto"}</p>
+            <code title={item.id}>{item.id}</code>
+          </div>
+          <a className="linkButton studioReelLink" href={item.permalinkUrl} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Ver en Facebook</a>
         </article>;
-      }) : <div className="reelEmpty"><Film size={32}/><strong>No encontramos Reels confirmados todavía</strong><span>Prueba ampliando el periodo o pulsa Actualizar.</span></div>}
+      }) : <div className="studioEmpty studioEmptyBox"><Film size={28}/><strong>Aún no hay Reels confirmados</strong><span>Amplía el periodo o pulsa Actualizar.</span></div>}
     </section>
 
-    {!!after && <div className="reelLoadMore"><button className="uiBtn uiBtnSecondary" onClick={() => void load(false)} disabled={loading}>{loading ? <Loader2 className="spin" size={16}/> : <RefreshCw size={16}/>} Buscar más publicaciones</button></div>}
+    {!!after && <div className="studioLoadMore"><button className="uiBtn uiBtnSecondary" onClick={() => void load(false)} disabled={loading}>{loading ? <Loader2 className="spin" size={16}/> : <RefreshCw size={16}/>} Buscar más publicaciones</button></div>}
 
-    {!!ambiguous.length && <details className="reelAmbiguous"><summary><Video size={16}/> {ambiguous.length} videos que Efímero no pudo confirmar como Reel</summary><p>No entran en la selección masiva para evitar borrar videos normales por accidente. Puedes revisarlos desde Facebook si lo necesitas.</p></details>}
-  </>;
+    {!!ambiguous.length && <details className="studioDetails"><summary><Video size={16}/> {ambiguous.length} {ambiguous.length === 1 ? "video" : "videos"} sin confirmar como Reel</summary><p>No entran en la selección masiva para no borrar videos normales por accidente. Puedes revisarlos directamente en Facebook.</p></details>}
+
+    {!!sorted.length && <div className="actionBar">
+      <div className="actionBarSummary"><span><small>Selección</small><strong>{selected.size} de {sorted.length} {sorted.length === 1 ? "Reel" : "Reels"}</strong></span></div>
+      <div className="actionBarButtons"><button className="uiBtn uiBtnDanger" onClick={() => void deleteSelected()} disabled={!selected.size || deleting}>{deleting ? <Loader2 className="spin" size={16}/> : <Trash2 size={16}/>} Eliminar seleccionados</button></div>
+    </div>}
+  </div>;
 }

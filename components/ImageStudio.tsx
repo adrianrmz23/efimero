@@ -29,15 +29,27 @@ export default function ImageStudio({library,onQueue}:Props){
   function download(){const a=document.createElement("a");a.href=dataUrl;a.download=`efimero-${aspect.replace(":","x")}.png`;a.click()}
 
   return <>
-    <div className="pageIntro"><div><span className="overline">BLOQUE 12 · MOTOR DE IMÁGENES</span><h1>Texto exacto + fondo visual</h1><p>La IA puede crear el fondo, pero el copy se compone en canvas para conservar exactamente cada palabra y evitar errores de tipografía generativa.</p></div></div>
-    <div className="imageStudioGrid"><section className="toolPanel imageControls"><div className="panelTitle"><div><Palette size={20}/><div><h2>Diseña la creatividad</h2><p>Elige texto, relación de aspecto y estilo.</p></div></div></div>
-      <label><span>Texto</span><textarea value={text} onChange={e=>setText(e.target.value)} rows={6}/></label>
-      {suggestions.length>0&&<div className="copySuggestions"><span>Biblioteca</span>{suggestions.map((x:any)=><button key={x.id} onClick={()=>setText(x.text)}>{x.text.slice(0,72)}{x.text.length>72?"…":""}</button>)}</div>}
-      <div className="imageOptionGrid"><label><span>Formato</span><select value={aspect} onChange={e=>setAspect(e.target.value)}><option>1:1</option><option>4:5</option><option>9:16</option></select></label><label><span>Plantilla</span><select value={template} onChange={e=>{setTemplate(e.target.value);setBg(null)}}><option>Noche</option><option>Atardecer</option><option>Papel</option><option>Minimal</option></select></label></div>
-      <button className="outlineButton imageAiButton" onClick={generateBackground} disabled={busy}>{busy?<Loader2 className="spin" size={17}/>:<WandSparkles size={17}/>} Generar fondo con IA</button>
-      {(message||error)&&<div className={error?"calendarNotice error":"calendarNotice"}>{error?<AlertTriangle size={17}/>:<CheckCircle2 size={17}/>}<span>{error||message}</span></div>}
-      <div className="imageActions"><button onClick={download} disabled={!dataUrl}><Download size={17}/> Descargar PNG</button><button className="primary" onClick={addToCalendar} disabled={busy||!dataUrl}><ShieldCheck size={17}/> Revisar y enviar al calendario</button></div>
-    </section>
-    <section className="imagePreviewPanel"><div className="imagePreviewHead"><div><ImageIcon size={19}/><strong>Vista previa</strong></div><span>{aspect} · PNG</span></div><div className={`canvasWrap aspect-${aspect.replace(":","-")}`}><canvas ref={canvasRef}/></div><small>El fondo IA es opcional. El texto siempre se renderiza localmente para conservar precisión.</small></section></div>
+    <div className="pageIntro"><div><span className="overline">IMÁGENES</span><h1>Estudio de imágenes</h1><p>Texto exacto sobre fondo visual. La IA puede crear el fondo, pero el copy se compone en canvas para conservar cada palabra y evitar errores tipográficos.</p></div></div>
+    <div className="setSplit setSplitImage">
+      <section className="setCard">
+        <div className="setCardTitle"><Palette size={18}/><div><h2>Diseña la creatividad</h2><p>Elige texto, formato y estilo.</p></div></div>
+        <label className="setField"><span>Texto</span><textarea value={text} onChange={e=>setText(e.target.value)} rows={6}/></label>
+        {suggestions.length>0&&<div className="setField"><span className="setFieldLabel">Desde tu Biblioteca</span><div className="setPickList">{suggestions.map((x:any)=><button type="button" className="setPick" key={x.id} onClick={()=>setText(x.text)} title={x.text}>{x.text.slice(0,72)}{x.text.length>72?"…":""}</button>)}</div></div>}
+        <div className="setFields">
+          <label className="setField"><span>Formato</span><select value={aspect} onChange={e=>setAspect(e.target.value)}><option>1:1</option><option>4:5</option><option>9:16</option></select></label>
+          <label className="setField"><span>Plantilla</span><select value={template} onChange={e=>{setTemplate(e.target.value);setBg(null)}}><option>Noche</option><option>Atardecer</option><option>Papel</option><option>Minimal</option></select></label>
+        </div>
+        <button className="uiBtn uiBtnSecondary wide" onClick={generateBackground} disabled={busy}>{busy?<Loader2 className="spin" size={16}/>:<WandSparkles size={16}/>} Generar fondo con IA</button>
+        {(message||error)&&<div className={error?"setNotice error":"setNotice success"}>{error?<AlertTriangle size={16}/>:<CheckCircle2 size={16}/>}<span>{error||message}</span></div>}
+        <div className="setDivider"/>
+        <div className="setActions stretch"><button className="uiBtn uiBtnSecondary" onClick={download} disabled={!dataUrl}><Download size={16}/> Descargar PNG</button><button className="uiBtn uiBtnPrimary" onClick={addToCalendar} disabled={busy||!dataUrl}><ShieldCheck size={16}/> Revisar y enviar al calendario</button></div>
+      </section>
+
+      <section className="setCard setPreview setSticky">
+        <div className="setCardHead"><div className="setCardTitle"><ImageIcon size={18}/><div><h2>Vista previa</h2></div></div><span className="setTag">{aspect} · PNG</span></div>
+        <div className={`canvasWrap aspect-${aspect.replace(":","-")}`}><canvas ref={canvasRef}/></div>
+        <p className="setHint">El fondo con IA es opcional. El texto siempre se renderiza localmente para conservar la precisión.</p>
+      </section>
+    </div>
   </>
 }
