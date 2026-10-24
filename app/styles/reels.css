@@ -29,3 +29,14 @@
 .reelPairActions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .reelCost{display:flex;align-items:center;height:40px;font-size:14px;font-weight:600;color:var(--ui-text)}
 @media(max-width:1100px){.reelGrid{grid-template-columns:1fr}}
+.reelAi{display:flex;flex-direction:column;gap:12px;padding:12px 14px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-bg)}
+.reelAi[open]{gap:14px}
+.reelAi summary{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;list-style:none}
+.reelAi summary::-webkit-details-marker{display:none}
+.reelAi>.uiBtn{align-self:flex-start}
+.reelAi[open]>*+*{margin-top:12px}
+.reelVoice{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--ui-border)}
+.reelVoice .field>span{display:inline-flex;align-items:center;gap:6px}
+.reelVoice select{width:auto}
+.reelVoice audio{height:36px;max-width:260px}
+.reelSceneFields .studioChip{align-self:flex-start}

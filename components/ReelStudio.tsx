@@ -2,14 +2,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import "@fontsource/inter/700.css";
-import { AlertTriangle, ArrowDown, ArrowUp, Clapperboard, Download, Film, ImagePlus, Loader2, Music, Sparkles, Trash2, Wand2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Clapperboard, Download, Film, ImagePlus, Loader2, Mic, Music, Sparkles, Trash2, Video, Wand2, X } from "lucide-react";
 import { renderReel, type ReelScene } from "@/lib/reelRender";
 import { totalDuration } from "@/lib/reelTimeline";
 import { TRANSFORM_PRESETS, beforePrompt, transformPrompt } from "@/lib/transformPresets";
+import { DEFAULT_HOUSE_STYLE, ROOM_PRESETS, roomImagePrompt, roomMotionPrompt } from "@/lib/walkthroughPresets";
 import { useConfirm } from "@/components/ui/DialogProvider";
 
 type Mode = "walkthrough" | "transform";
 type Job = { statusUrl: string; responseUrl: string; estimatedCost: number };
+// Escena del recorrido: puede tener un clip animado con IA; `status` muestra si se está animando.
+type Scene = ReelScene & { motion?: string; status?: "animating" | "error"; note?: string };
+const VOICES:Array<[string,string]>=[["Kore","Kore · mujer, clara"],["Aoede","Aoede · mujer, cálida"],["Leda","Leda · mujer, joven"],["Charon","Charon · hombre, grave"],["Puck","Puck · hombre, animado"],["Orus","Orus · hombre, firme"]];
+const CLIP_COST=.21;
+
+// Corre tareas con un máximo de `limit` a la vez.
+async function pool<T>(items:T[],limit:number,task:(item:T)=>Promise<void>){const queue=[...items];await Promise.all(Array.from({length:Math.min(limit,queue.length)},async()=>{while(queue.length)await task(queue.shift() as T)}))}
+
+// La API de video rechaza peticiones de más de 300 KB: se manda una versión reducida de la escena.
+async function compressForVideo(dataUrl:string){
+  const img=await new Promise<HTMLImageElement>((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error("No se pudo leer la escena."));i.src=dataUrl});
+  const c=document.createElement("canvas");c.width=720;c.height=1280;const ctx=c.getContext("2d");if(!ctx)throw new Error("No se pudo procesar la escena.");
+  const ratio=Math.max(720/img.width,1280/img.height);const w=img.width*ratio,h=img.height*ratio;ctx.drawImage(img,(720-w)/2,(1280-h)/2,w,h);
+  for(let q=.82;q>=.5;q-=.08){const out=c.toDataURL("image/jpeg",q);if(out.length<270_000)return out}
+  return c.toDataURL("image/jpeg",.45);
+}
 
 // Reduce las imágenes a tamaño de reel: menos peso para el navegador y para enviarlas al servidor.
 async function fileToDataUrl(file: File, maxW = 1080, maxH = 1920) {
@@ -27,9 +44,11 @@ export default function ReelStudio(){
   const [mode,setMode]=useState<Mode>("walkthrough");
   const confirm=useConfirm();
   // Recorrido
-  const [scenes,setScenes]=useState<ReelScene[]>([]);const [title,setTitle]=useState("Casa de 6 m de frente ✅");const [music,setMusic]=useState<File|null>(null);
+  const [scenes,setScenes]=useState<Scene[]>([]);const [title,setTitle]=useState("Casa de 6 m de frente ✅");const [music,setMusic]=useState<File|null>(null);
   const [rendering,setRendering]=useState(false);const [progress,setProgress]=useState(0);const [output,setOutput]=useState<{url:string;type:string}|null>(null);
   const imagesRef=useRef<HTMLInputElement>(null);const musicRef=useRef<HTMLInputElement>(null);
+  const [houseStyle,setHouseStyle]=useState(DEFAULT_HOUSE_STYLE);const [rooms,setRooms]=useState<string[]>(ROOM_PRESETS.map(r=>r.id));const [generating,setGenerating]=useState("");
+  const [narration,setNarration]=useState("");const [voice,setVoice]=useState("Kore");const [voiceBlob,setVoiceBlob]=useState<Blob|null>(null);const [voiceUrl,setVoiceUrl]=useState("");const [voiceBusy,setVoiceBusy]=useState(false);
   // Transformación
   const [presetId,setPresetId]=useState(TRANSFORM_PRESETS[0].id);const [extra,setExtra]=useState("");const [after,setAfter]=useState("");const [before,setBefore]=useState("");const [duration,setDuration]=useState(10);
   const [busy,setBusy]=useState("");const [job,setJob]=useState<Job|null>(null);const [jobState,setJobState]=useState("");const [videoUrl,setVideoUrl]=useState("");
@@ -38,6 +57,40 @@ export default function ReelStudio(){
   const preset=TRANSFORM_PRESETS.find(p=>p.id===presetId);
 
   useEffect(()=>()=>{if(output)URL.revokeObjectURL(output.url)},[output]);
+  useEffect(()=>()=>{if(voiceUrl)URL.revokeObjectURL(voiceUrl)},[voiceUrl]);
+
+  // Genera las imágenes del recorrido (una por espacio) con el mismo estilo de casa.
+  async function generateImages(){
+    const selected=ROOM_PRESETS.filter(r=>rooms.includes(r.id));if(!selected.length)return;
+    if(!await confirm({title:`¿Generar ${selected.length} imágenes con IA?`,description:`Se usará Cheaper Inference (aprox. 0.02 USD por imagen, ${(selected.length*.02).toFixed(2)} USD en total). Se agregan como escenas en el orden de la casa.`,confirmLabel:"Generar imágenes"}))return;
+    setError("");setOutput(null);let done=0;const results:Array<Scene|null>=selected.map(()=>null);setGenerating(`0/${selected.length}`);
+    await pool(selected.map((room,i)=>({room,i})),3,async({room,i})=>{
+      try{const r=await fetch("/api/media/image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:roomImagePrompt(room,houseStyle)})});const d=await r.json();if(!r.ok)throw new Error(d.error||"No se pudo generar la imagen.");results[i]={image:d.image,caption:room.label,duration:3,motion:room.motion}}
+      catch(e:any){setError(`${room.label}: ${e?.message||"no se pudo generar"}`)}
+      done++;setGenerating(`${done}/${selected.length}`);
+    });
+    setScenes(cur=>[...cur,...results.filter((x):x is Scene=>Boolean(x))].slice(0,20));setGenerating("");
+  }
+  // Anima una escena: la cámara recorre el espacio (clip de 5 s generado con IA).
+  async function animateScene(index:number){
+    const scene=scenes[index];if(!scene||scene.video)return;
+    setScenes(cur=>cur.map((s,k)=>k===index?{...s,status:"animating",note:""}:s));
+    try{const image=await compressForVideo(scene.image);const r=await fetch("/api/media/video",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image,prompt:roomMotionPrompt(scene.motion||""),duration:5})});const d=await r.json();if(!r.ok)throw new Error(d.error||"No se pudo animar la escena.");
+      const file=await fetch(d.url);if(!file.ok)throw new Error("No se pudo descargar el clip.");const url=URL.createObjectURL(await file.blob());
+      setScenes(cur=>cur.map((s,k)=>k===index?{...s,video:url,duration:5,status:undefined}:s));setOutput(null)}
+    catch(e:any){setScenes(cur=>cur.map((s,k)=>k===index?{...s,status:"error",note:e?.message||"Error al animar"}:s))}
+  }
+  async function animateAll(){
+    const pending=scenes.map((s,i)=>({s,i})).filter(x=>!x.s.video&&x.s.status!=="animating");if(!pending.length)return;
+    if(!await confirm({title:`¿Animar ${pending.length} escenas con IA?`,description:`Cada escena se convierte en un clip de 5 s con la cámara recorriendo el espacio (aprox. ${CLIP_COST} USD por clip, ${(pending.length*CLIP_COST).toFixed(2)} USD en total). Cada clip tarda de 1 a 4 minutos; se generan 3 a la vez. Deja esta pestaña abierta.`,confirmLabel:"Animar escenas"}))return;
+    await pool(pending.map(x=>x.i),3,animateScene);
+  }
+  async function generateVoice(){
+    if(!narration.trim())return;setVoiceBusy(true);setError("");
+    try{const r=await fetch("/api/media/speech",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:narration,voice})});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||"No se pudo generar la voz.")}
+      const blob=await r.blob();setVoiceBlob(blob);setVoiceUrl(URL.createObjectURL(blob));setOutput(null)}
+    catch(e:any){setError(e?.message||"No se pudo generar la voz.")}finally{setVoiceBusy(false)}
+  }
   // Consulta el estado del video cada 8 segundos mientras fal.ai lo genera.
   useEffect(()=>{
     if(!job)return;let stop=false;
@@ -59,7 +112,7 @@ export default function ReelStudio(){
   function moveScene(i:number,dir:-1|1){setScenes(cur=>{const next=[...cur];const j=i+dir;if(j<0||j>=next.length)return cur;[next[i],next[j]]=[next[j],next[i]];return next});setOutput(null)}
   async function render(){
     setRendering(true);setProgress(0);setError("");setOutput(null);
-    try{const {blob,type}=await renderReel(scenes,{title,music},setProgress);setOutput({url:URL.createObjectURL(blob),type})}
+    try{const {blob,type}=await renderReel(scenes,{title,music,voice:voiceBlob},setProgress);setOutput({url:URL.createObjectURL(blob),type})}
     catch(e:any){setError(e?.message||"No se pudo generar el reel.")}finally{setRendering(false)}
   }
 
@@ -94,17 +147,28 @@ export default function ReelStudio(){
       <section className="calPanel">
         <div className="adsHead"><div><h2>Escenas</h2><p>Sube las imágenes del recorrido en orden: fachada, entrada, sala, cocina… Cada una se anima con un acercamiento suave.</p></div><span className="statusPill tone-neutral">{scenes.length} · {seconds.toFixed(1)} s</span></div>
         <input ref={imagesRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e=>void addImages(e)}/>
+        <details className="reelAi" open={!scenes.length}>
+          <summary><Sparkles size={15}/> Crear las imágenes con IA</summary>
+          <label className="field"><span>Estilo de la casa <small>en inglés; se repite en todas las imágenes para que parezcan la misma casa</small></span><textarea rows={3} value={houseStyle} onChange={e=>setHouseStyle(e.target.value)}/></label>
+          <div className="field"><span>Espacios del recorrido, en orden</span><div className="adsCountries">{ROOM_PRESETS.map(r=><button type="button" key={r.id} className={rooms.includes(r.id)?"active":""} aria-pressed={rooms.includes(r.id)} onClick={()=>setRooms(cur=>cur.includes(r.id)?cur.filter(x=>x!==r.id):ROOM_PRESETS.map(x=>x.id).filter(x=>cur.includes(x)||x===r.id))}>{r.label}</button>)}</div></div>
+          <button type="button" className="uiBtn uiBtnSecondary" onClick={()=>void generateImages()} disabled={!!generating||!rooms.length||rendering}>{generating?<Loader2 className="spin" size={16}/>:<Sparkles size={16}/>} {generating?`Generando ${generating}…`:`Generar ${rooms.length} imágenes`}</button>
+        </details>
         <label className="field"><span>Texto inicial (los primeros 3 segundos)</span><input value={title} maxLength={80} onChange={e=>{setTitle(e.target.value);setOutput(null)}} placeholder="Casa de 6 m de frente ✅"/></label>
         {scenes.length?<ol className="reelScenes">{scenes.map((s,i)=><li key={i}>
           <img src={s.image} alt={`Escena ${i+1}`}/>
-          <div className="reelSceneFields"><input value={s.caption} maxLength={70} placeholder={`Texto de la escena ${i+1} (opcional)`} onChange={e=>patchScene(i,{caption:e.target.value})}/><label><span>Duración</span><select value={s.duration} onChange={e=>patchScene(i,{duration:Number(e.target.value)})}>{[2,2.5,3,4,5].map(n=><option key={n} value={n}>{n} s</option>)}</select></label></div>
-          <div className="reelSceneActions"><button type="button" className="uiIconBtn" onClick={()=>moveScene(i,-1)} disabled={i===0} aria-label="Subir"><ArrowUp size={15}/></button><button type="button" className="uiIconBtn" onClick={()=>moveScene(i,1)} disabled={i===scenes.length-1} aria-label="Bajar"><ArrowDown size={15}/></button><button type="button" className="uiIconBtn" onClick={()=>{setScenes(cur=>cur.filter((_,k)=>k!==i));setOutput(null)}} aria-label="Quitar"><Trash2 size={15}/></button></div>
+          <div className="reelSceneFields">{s.video?<span className="studioChip ok"><Check size={12}/> Recorrido animado</span>:s.status==="animating"?<span className="studioChip"><Loader2 className="spin" size={12}/> Animando… (1 a 4 min)</span>:s.status==="error"?<span className="studioChip error" title={s.note}><AlertTriangle size={12}/> {s.note||"Error"}</span>:null}<input value={s.caption} maxLength={70} placeholder={`Texto de la escena ${i+1} (opcional)`} onChange={e=>patchScene(i,{caption:e.target.value})}/><label><span>Duración</span><select value={s.duration} onChange={e=>patchScene(i,{duration:Number(e.target.value)})}>{(s.video?[3,4,5]:[2,2.5,3,4,5]).map(n=><option key={n} value={n}>{n} s</option>)}</select></label></div>
+          <div className="reelSceneActions">{!s.video&&<button type="button" className="uiIconBtn" onClick={()=>void animateScene(i)} disabled={s.status==="animating"||rendering} title="Animar con IA" aria-label="Animar con IA"><Video size={15}/></button>}<button type="button" className="uiIconBtn" onClick={()=>moveScene(i,-1)} disabled={i===0} aria-label="Subir"><ArrowUp size={15}/></button><button type="button" className="uiIconBtn" onClick={()=>moveScene(i,1)} disabled={i===scenes.length-1} aria-label="Bajar"><ArrowDown size={15}/></button><button type="button" className="uiIconBtn" onClick={()=>{setScenes(cur=>cur.filter((_,k)=>k!==i));setOutput(null)}} aria-label="Quitar"><Trash2 size={15}/></button></div>
         </li>)}</ol>:<button type="button" className="reelDrop" onClick={()=>imagesRef.current?.click()}><ImagePlus size={22}/><strong>Subir imágenes del recorrido</strong><span>De 4 a 10 imágenes verticales de la misma casa. Hasta 20.</span></button>}
         <div className="reelToolbar">
           {!!scenes.length&&<button type="button" className="uiBtn uiBtnSecondary" onClick={()=>imagesRef.current?.click()} disabled={rendering||scenes.length>=20}><ImagePlus size={16}/> Agregar imágenes</button>}
+          {scenes.some(s=>!s.video)&&<button type="button" className="uiBtn uiBtnSecondary" onClick={()=>void animateAll()} disabled={rendering||scenes.some(s=>s.status==="animating")}><Video size={16}/> Animar recorrido con IA ({scenes.filter(s=>!s.video).length})</button>}
           <input ref={musicRef} type="file" accept="audio/*" hidden onChange={e=>{setMusic(e.target.files?.[0]||null);e.target.value="";setOutput(null)}}/>
           <button type="button" className="uiBtn uiBtnSecondary" onClick={()=>musicRef.current?.click()} disabled={rendering}><Music size={16}/> {music?"Cambiar música":"Agregar música"}</button>
           {music&&<span className="reelMusic">{music.name}<button type="button" className="uiIconBtn" onClick={()=>{setMusic(null);setOutput(null)}} aria-label="Quitar música"><X size={14}/></button></span>}
+        </div>
+        <div className="reelVoice">
+          <label className="field"><span><Mic size={14}/> Voz en off <small>opcional</small></span><textarea rows={3} maxLength={1500} value={narration} onChange={e=>{setNarration(e.target.value);setVoiceBlob(null);setVoiceUrl("")}} placeholder="Esta casa tiene solo 6 metros de frente, pero mira todo lo que cabe adentro…"/></label>
+          <div className="reelToolbar"><select aria-label="Voz" value={voice} onChange={e=>{setVoice(e.target.value);setVoiceBlob(null);setVoiceUrl("")}}>{VOICES.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><button type="button" className="uiBtn uiBtnSecondary" onClick={()=>void generateVoice()} disabled={!narration.trim()||voiceBusy||rendering}>{voiceBusy?<Loader2 className="spin" size={16}/>:<Mic size={16}/>} Generar voz</button>{voiceUrl&&<audio src={voiceUrl} controls/>}</div>
         </div>
         <p className="settingsHint">Usa música libre de derechos (por ejemplo, la biblioteca de audio de YouTube o Pixabay Music). Mientras se genera, deja esta pestaña abierta y visible.</p>
         <div className="actionBar reelActions"><button type="button" className="uiBtn uiBtnPrimary" onClick={()=>void render()} disabled={!scenes.length||rendering}>{rendering?<Loader2 className="spin" size={16}/>:<Clapperboard size={16}/>} {rendering?`Generando… ${Math.round(progress*100)}%`:"Generar reel"}</button></div>
