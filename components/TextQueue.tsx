@@ -1,10 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardCheck, Loader2, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useConfirm } from "@/components/ui/DialogProvider";
 
-type Item = { id:string; date:string; time:string; category:string; text:string; status:string; compliance?:any; pageName?:string };
+type Item = { id:string; date:string; time:string; category:string; text:string; status:string; compliance?:any; pageName?:string; metaPostId?:string };
+// Lo que ya está en la cola de Facebook se cancela desde el Calendario, no se borra aquí.
+const inMeta=(x:Item)=>Boolean(x.metaPostId)&&x.status==="Programado";
 type Props = { items:Item[]; onChange:(items:Item[])=>void; onOpenCalendar:()=>void };
 
 const statusOrder=["Borrador","Revisión","Aprobado","Programado","Publicado","Error"];
@@ -14,6 +17,7 @@ export default function TextQueue({items,onChange,onOpenCalendar}:Props){
   const [filter,setFilter]=useState("Pendientes");
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
+  const confirm=useConfirm();
   const stats=useMemo(()=>({pending:items.filter(x=>x.status==="Borrador"||x.status==="Revisión").length,approved:items.filter(x=>x.status==="Aprobado").length,scheduled:items.filter(x=>x.status==="Programado").length,blocked:items.filter(x=>x.compliance?.status&&x.compliance.status!=="pass").length}),[items]);
   const visible=useMemo(()=>items.filter(x=>filter==="Todos"?true:filter==="Pendientes"?(x.status==="Borrador"||x.status==="Revisión"):x.status===filter).slice(0,120),[items,filter]);
 
@@ -45,6 +49,21 @@ export default function TextQueue({items,onChange,onOpenCalendar}:Props){
     setMessage(`${ids.size} textos aprobados.`);
   }
 
+  // Borra de Efímero (Supabase y este navegador). No toca Facebook.
+  async function removeItems(targets:Item[]){
+    const removable=targets.filter(x=>!inMeta(x));if(!removable.length)return;
+    const one=removable.length===1;
+    if(!await confirm({title:one?"¿Eliminar este texto?":`¿Eliminar ${removable.length} textos?`,description:one?`${removable[0].date} · ${removable[0].time} · ${removable[0].category}
+Se eliminará de Efímero. No afecta a Facebook.`:"Se eliminarán de Efímero. No afecta a nada que ya esté programado en Facebook.",confirmLabel:"Eliminar",tone:"danger"}))return;
+    const ids=new Set(removable.map(x=>x.id));
+    setBusy(true);
+    try{
+      if(supabase){const {error}=await supabase.from("efimero_scheduled_posts").delete().in("id",[...ids]);if(error)throw error;}
+      onChange(items.filter(x=>!ids.has(x.id)));
+      setMessage(one?"Texto eliminado.":`${ids.size} textos eliminados.`);
+    }catch(e:any){setMessage(e?.message||"No se pudieron eliminar.")}finally{setBusy(false)}
+  }
+
   const filters=["Pendientes","Aprobado","Programado","Publicado","Error","Todos"];
   const filterLabel:Record<string,string>={Pendientes:"Pendientes",Aprobado:"Aprobados",Programado:"Programados",Publicado:"Publicados",Error:"Con error",Todos:"Todos"};
   const filterCount=(value:string)=>value==="Todos"?items.length:value==="Pendientes"?stats.pending:items.filter(x=>x.status===value).length;
@@ -63,6 +82,7 @@ export default function TextQueue({items,onChange,onOpenCalendar}:Props){
       <div className="calPanelHead">
         <div><h2 id="calQueueTitle">Textos</h2><p>Se muestran hasta 120 textos para mantener la revisión ligera.</p></div>
         <div className="calPanelActions">
+          {(filter==="Error"||filter==="Pendientes")&&visible.length>0&&<button type="button" className="uiBtn uiBtnGhost" onClick={()=>void removeItems(visible)} disabled={busy}><Trash2 size={16}/> Eliminar {filter==="Error"?"los con error":"pendientes"} ({visible.length})</button>}
           <button type="button" className="uiBtn uiBtnSecondary" onClick={reviewPending} disabled={busy}>{busy?<Loader2 className="spin" size={16}/>:<ShieldCheck size={16}/>} Revisar pendientes</button>
           <button type="button" className="uiBtn uiBtnPrimary" onClick={approvePass}><CheckCircle2 size={16}/> Aprobar los que pasan</button>
         </div>
@@ -89,6 +109,7 @@ export default function TextQueue({items,onChange,onOpenCalendar}:Props){
             <div className="calRowActions">
               {!c&&<button type="button" className="uiIconBtn" title="Revisar Compliance" aria-label="Revisar Compliance" onClick={()=>reviewOne(item)}><ShieldCheck size={16}/></button>}
               {c?.status==="pass"&&item.status!=="Aprobado"&&<button type="button" className="uiBtn uiBtnSecondary calRowApprove" onClick={()=>patch(item.id,{status:"Aprobado"})}><CheckCircle2 size={16}/> Aprobar</button>}
+              {!inMeta(item)&&<button type="button" className="uiIconBtn" title="Eliminar" aria-label="Eliminar texto" onClick={()=>void removeItems([item])} disabled={busy}><Trash2 size={16}/></button>}
               {statusOrder.includes(item.status)&&<select className="calRowSelect" aria-label="Cambiar estado" value={item.status} onChange={e=>patch(item.id,{status:e.target.value})}>{statusOrder.map(s=><option key={s}>{s}</option>)}</select>}
             </div>
           </article>;
