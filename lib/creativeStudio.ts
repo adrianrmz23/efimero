@@ -28,6 +28,67 @@ function fillPaper(ctx:CanvasRenderingContext2D,w:number,h:number){const grad=ct
   for(let i=0;i<360;i++){const x=((i*4337)%1009)/1009*w,y=((i*2399)%1013)/1013*h;ctx.fillStyle=i%2?"rgba(93,55,20,.055)":"rgba(255,250,230,.13)";ctx.fillRect(x,y,2+(i%3),1+(i%2));}}
 function ornate(ctx:CanvasRenderingContext2D,w:number,h:number){ctx.strokeStyle="#95651f";ctx.lineWidth=8;rounded(ctx,19,19,w-38,h-38,20);ctx.stroke();ctx.strokeStyle="#e7b958";ctx.lineWidth=3;rounded(ctx,31,31,w-62,h-62,14);ctx.stroke();
  for(const sx of [1,-1])for(const sy of [1,-1]){ctx.save();ctx.translate(sx>0?42:w-42,sy>0?42:h-42);ctx.scale(sx,sy);ctx.strokeStyle="#9f6b25";ctx.lineWidth=6;for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(0,110-i*12);ctx.bezierCurveTo(18+i*8,56,90,65-i*7,101,0);ctx.stroke();}for(let i=0;i<3;i++){ctx.beginPath();ctx.ellipse(26+i*20,24+i*12,12,26,Math.PI/4,0,Math.PI*2);ctx.stroke();}ctx.restore();}}
+
+const fontInter='Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+// Espera a que Inter esté lista: si el canvas dibuja antes, usa la fuente de respaldo.
+async function ensureInter(){
+  if(typeof document==="undefined"||!document.fonts)return;
+  try{await Promise.all([document.fonts.load(`400 48px Inter`),document.fonts.load(`700 48px Inter`)])}catch{/* Usa la fuente de respaldo. */}
+}
+// Divide en renglones respetando los saltos de línea del texto; "" marca una línea en blanco.
+function wrapVerses(ctx:CanvasRenderingContext2D,text:string,width:number){
+  const out:string[]=[];
+  for(const raw of text.replace(/\r\n?/g,"\n").trim().split("\n")){
+    const verse=raw.trim();
+    if(!verse){if(out.length&&out[out.length-1]!=="")out.push("");continue}
+    let line="";
+    for(const word of verse.split(/\s+/)){const candidate=line?`${line} ${word}`:word;if(line&&ctx.measureText(candidate).width>width){out.push(line);line=word}else line=candidate}
+    if(line)out.push(line);
+  }
+  return out;
+}
+
+// Plantilla "Texto minimalista": fiel al formato de publicación tipo tweet (avatar, nombre, @usuario, título y versos).
+async function drawMinimal(ctx:CanvasRenderingContext2D,w:number,h:number,content:CreativeContent,brand:CreativeBrand){
+  await ensureInter();
+  ctx.fillStyle="#ffffff";ctx.fillRect(0,0,w,h);
+  const pad=w*.044, textW=w-pad*2;
+  const avatarD=w*.148, gapHeader=w*.026;
+  const nameSize=w*.044, handleSize=w*.04;
+  const titleText=(content.title||"").trim();
+  const body=(content.body||"").trim();
+  // Autoajuste: baja el tamaño hasta que todo el bloque quepa en el 86% del alto.
+  let size=w*.053, lines:string[]=[], titleLines:string[]=[], blockH=0;
+  const lineH=()=>size*1.3, blankH=()=>lineH()*.75;
+  const measure=()=>{
+    ctx.font=`400 ${size}px ${fontInter}`;
+    titleLines=titleText?wrapVerses(ctx,titleText,textW):[];
+    lines=wrapVerses(ctx,body,textW);
+    const textH=[...titleLines,...(titleLines.length?[""]:[]),...lines].reduce((n,l)=>n+(l?lineH():blankH()),0);
+    blockH=avatarD+h*.056+textH;
+  };
+  measure();
+  while(blockH>h*.86&&size>w*.026){size-=1;measure()}
+  if(blockH>h*.94)return false;
+  // El bloque queda ligeramente por debajo del centro, como en las referencias.
+  const top=Math.max(h*.04,h*.535-blockH/2);
+  const cx=pad+avatarD/2, cy=top+avatarD/2;
+  if(brand.avatar){const avatar=await imageFrom(brand.avatar);ctx.save();ctx.beginPath();ctx.arc(cx,cy,avatarD/2,0,Math.PI*2);ctx.clip();crop(ctx,avatar,pad,top,avatarD,avatarD);ctx.restore();}
+  else{ctx.fillStyle="#111111";ctx.beginPath();ctx.arc(cx,cy,avatarD/2,0,Math.PI*2);ctx.fill();ctx.fillStyle="#ffffff";ctx.font=`700 ${avatarD*.42}px ${fontInter}`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText((brand.name||"E").trim().slice(0,1).toUpperCase(),cx,cy+avatarD*.02);}
+  const bx=pad+avatarD+gapHeader, bw=w-bx-pad;
+  ctx.textAlign="left";ctx.textBaseline="alphabetic";
+  const hasHandle=Boolean(brand.handle.trim());
+  ctx.fillStyle="#0f0f0f";ctx.font=`700 ${nameSize}px ${fontInter}`;
+  ctx.fillText(brand.name||"Tu página",bx,hasHandle?cy-avatarD*.04:cy+nameSize*.36,bw);
+  if(hasHandle){const handle=brand.handle.trim().startsWith("@")?brand.handle.trim():`@${brand.handle.trim()}`;ctx.fillStyle="#8a8a8f";ctx.font=`400 ${handleSize}px ${fontInter}`;ctx.fillText(handle,bx,cy+avatarD*.3,bw);}
+  let y=top+avatarD+h*.056;
+  ctx.fillStyle="#0d0d0d";ctx.font=`400 ${size}px ${fontInter}`;ctx.textBaseline="top";
+  for(const l of [...titleLines,...(titleLines.length?[""]:[]),...lines]){
+    if(l){ctx.fillText(l,pad,y+(lineH()-size)/2,textW);y+=lineH()}else y+=blankH();
+  }
+  return true;
+}
+
 export async function drawCreative(canvas:HTMLCanvasElement,content:CreativeContent,brand:CreativeBrand,assets:CreativeAsset,aspect:CreativeAspect):Promise<{dataUrl:string;error?:string}>{
  const [w,h]=CREATIVE_DIMENSIONS[aspect];canvas.width=w;canvas.height=h;const ctx=canvas.getContext("2d");if(!ctx)throw new Error("No se pudo iniciar Canvas.");const isPrayer=content.kind==="prayer";
  let fits=true;
@@ -48,24 +109,14 @@ export async function drawCreative(canvas:HTMLCanvasElement,content:CreativeCont
    ctx.fillText(brand.name||"TU PÁGINA",w*.73,h*.918,w*.42);
    ornate(ctx,w,h);
  }else{
-   ctx.fillStyle="#fffefe";ctx.fillRect(0,0,w,h);
-   const pad=w*.055, top=h*.28,avatarR=w*.07;
-   if(brand.avatar){const avatar=await imageFrom(brand.avatar);ctx.save();ctx.beginPath();ctx.arc(pad+avatarR,top+avatarR,avatarR,0,Math.PI*2);ctx.clip();crop(ctx,avatar,pad,top,avatarR*2,avatarR*2);ctx.restore();}
-   else {ctx.fillStyle="#222024";ctx.beginPath();ctx.arc(pad+avatarR,top+avatarR,avatarR,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.font=`700 ${w*.064}px ${fontSans}`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText((brand.name||"E").trim().slice(0,1).toUpperCase(),pad+avatarR,top+avatarR);}
-   const bylineX=pad+avatarR*2+w*.026;
-   let t=textBlock(ctx,brand.name||"Nombre de tu página",{x:bylineX,y:top+avatarR*.27,w:w-bylineX-pad,h:avatarR*.65},{font:fontSans,size:w*.041,min:25,lineHeight:1.1,weight:"700",color:"#111111"});fits&&=t.fits;
-   if(brand.handle){t=textBlock(ctx,brand.handle,{x:bylineX,y:top+avatarR*1.07,w:w-bylineX-pad,h:avatarR*.65},{font:fontSans,size:w*.035,min:23,lineHeight:1.1,color:"#777780"});fits&&=t.fits;}
-   const titleY=top+avatarR*2+h*.055;
-   t=textBlock(ctx,content.title||"Reflexión",{x:pad,y:titleY,w:w-2*pad,h:h*.13},{font:fontSans,size:w*.056,min:36,lineHeight:1.17,color:"#0d0d0d"});fits&&=t.fits;
-   const bodyY=titleY+h*.135;
-   t=textBlock(ctx,content.body,{x:pad,y:bodyY,w:w-2*pad,h:h*.92-bodyY},{font:fontSans,size:w*.056,min:28,lineHeight:1.42,color:"#080808"});fits&&=t.fits;
+   fits=await drawMinimal(ctx,w,h,content,brand);
  }
  if(!fits)return {dataUrl:"",error:"El texto es demasiado largo para este formato. Acorta la oración o elige una imagen más vertical."};
  return {dataUrl:canvas.toDataURL("image/jpeg",.91)};
 }
 export function splitCreativeBatch(raw:string,kind:CreativeKind,defaults:CreativeContent):CreativeContent[]{
   // One item per --- separator. Prayer: optional first line `Santo | Intención`.
-  return raw.split(/^\s*---\s*$/m).map(chunk=>chunk.trim()).filter(Boolean).slice(0,12).map(chunk=>{
+  return raw.split(/^\s*---\s*$/m).map(chunk=>chunk.trim()).filter(Boolean).slice(0,100).map(chunk=>{
     if(kind==="prayer"){
       const lines=chunk.split("\n"); const head=lines[0]||"";
       if(head.includes("|")){const [saint,intention]=head.split("|").map(s=>s.trim());return {...defaults,kind,saint:saint||defaults.saint,intention:intention||defaults.intention,body:lines.slice(1).join("\n").trim()};}

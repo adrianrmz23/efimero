@@ -12,6 +12,7 @@ import {
   type LearningAnalysis,
   type LearningDocument,
 } from "@/lib/learningAgent";
+import { backfillImageTexts, effectivePostText } from "@/lib/imageText";
 
 const MAX_POSTS_PER_RUN = 400;
 const ANALYSIS_BATCH = 20;
@@ -111,21 +112,24 @@ export async function POST(request: NextRequest) {
     const pageNames = new Map((watchlist || []).map((x: any) => [String(x.id), String(x.name || "Página externa")]));
 
     const activeWatchIds = [...pageNames.keys()];
+    // Antes de analizar, lee la frase de las imágenes que todavía no se han leído.
+    const imagesRead = await backfillImageTexts(db, user.id, activeWatchIds, requestedLimit);
     const perPageLimit = Math.max(10, Math.ceil(requestedLimit / Math.max(1, activeWatchIds.length)));
     const pagePostResults = await Promise.all(activeWatchIds.map(async watchlistId => {
       const { data, error } = await db
         .from("efimero_inspiration_posts")
-        .select("id,watchlist_id,text,reactions,comments,shares,posted_at")
+        .select("id,watchlist_id,text,reactions,comments,shares,posted_at,image_text:raw->efimero_ocr->>text")
         .eq("owner_user_id", user.id)
         .eq("watchlist_id", watchlistId)
-        .neq("text", "")
         .order("posted_at", { ascending: false })
         .limit(Math.min(400, perPageLimit));
       if (error) throw error;
       return data || [];
     }));
+    // En páginas de frases la publicación real es la imagen; el texto del post suele ser un emoji.
     const usablePosts = pagePostResults.flat()
-      .filter((post: any) => String(post.text || "").trim().length >= 8)
+      .map((post: any) => ({ ...post, text: effectivePostText(post.text, post.image_text) }))
+      .filter((post: any) => post.text.length >= 8)
       .slice(0, requestedLimit);
     if (!usablePosts.length) {
       return NextResponse.json({ error: "Todavía no hay posts externos sincronizados. Ve al Radar y sincroniza una o más páginas primero." }, { status: 400 });
@@ -134,12 +138,13 @@ export async function POST(request: NextRequest) {
     const postIds = usablePosts.map((x: any) => x.id);
     const { data: existingDocs, error: existingError } = await db
       .from("efimero_learning_documents")
-      .select("inspiration_post_id")
+      .select("inspiration_post_id,source_text")
       .eq("owner_user_id", user.id)
       .in("inspiration_post_id", postIds);
     if (existingError && !String(existingError.message || "").includes("does not exist")) throw existingError;
-    const existingSet = new Set((existingDocs || []).map((x: any) => String(x.inspiration_post_id)));
-    const pending = force ? usablePosts : usablePosts.filter((post: any) => !existingSet.has(String(post.id)));
+    // Se vuelve a analizar si cambió el texto (por ejemplo, ahora se leyó la frase de la imagen).
+    const existingText = new Map((existingDocs || []).map((x: any) => [String(x.inspiration_post_id), String(x.source_text || "")]));
+    const pending = force ? usablePosts : usablePosts.filter((post: any) => existingText.get(String(post.id)) !== post.text);
 
     const pageMaximumWeighted = new Map<string, number>();
     for (const post of usablePosts as any[]) {
@@ -277,6 +282,7 @@ export async function POST(request: NextRequest) {
     }
 
     const stats = {
+      imagesRead,
       sourcePages: pageNames.size,
       sourcePosts: usablePosts.length,
       analyzedNow,

@@ -35,6 +35,7 @@ import MetaScheduledQueue from "@/components/MetaScheduledQueue";
 import ReelManager from "@/components/ReelManager";
 import NicheLab from "@/components/NicheLab";
 import CreativeStudio from "@/components/CreativeStudio";
+import type { SheetRow } from "@/lib/spreadsheetImport";
 import type { CreativeQueueItem } from "@/lib/creativeStudio";
 import { initialCategories, pad, timeToMinutes, toISODate, addDays, normalize, similarity, fingerprint, clamp, pct, emojiPattern, stopWords, buildEditorialProfile, detectCategory, calcPerformance, sourceLabel, sourceEmoji, extractReferencePattern } from "@/lib/editorial";
 import type { Category, LibrarySource, LibraryFilter, LibraryItem, ProfileCategory, ToneScores, EditorialProfile } from "@/lib/editorial";
@@ -59,6 +60,7 @@ function EfimeroShell(){
   const [tab,setTab]=useState<Tab>("home");
   const [paletteOpen,setPaletteOpen]=useState(false);
   const [creativeHandoff,setCreativeHandoff]=useState<CreativeQueueItem[]>([]);
+  const [studioRows,setStudioRows]=useState<{rows:SheetRow[];source:string;nonce:number}|null>(null);
   const [publisherPrefill,setPublisherPrefill]=useState<{text:string;category:string;nonce:number}|null>(null);
   useEffect(()=>{
     const section=new URLSearchParams(window.location.search).get("section") as Tab|null;
@@ -342,7 +344,7 @@ function EfimeroShell(){
       {activeSection.id===settingsSection.id&&tab!=="control"&&<button className="backLink" onClick={()=>setTab("control")}><ChevronLeft size={15}/> Centro de control</button>}
       {tab==="home"&&<HomeDashboard schedule={schedule} pageName={workspacePage?.name} pageId={workspacePageId} onNavigate={next=>setTab(next as Tab)} onOpenSearch={()=>setPaletteOpen(true)}/>}
       {tab==="niches"&&<NicheLab pages={workspacePages} activePageId={workspacePageId} onChoosePage={value=>void changeWorkspacePage(value)}/>}
-      {tab==="creativeStudio"&&<CreativeStudio pages={workspacePages} pageId={workspacePageId} onChoosePage={value=>void changeWorkspacePage(value)} onSendToBulk={items=>{setCreativeHandoff(items);setTab("bulkImages")}}/>}
+      {tab==="creativeStudio"&&<CreativeStudio pages={workspacePages} pageId={workspacePageId} onChoosePage={value=>void changeWorkspacePage(value)} onSendToBulk={items=>{setCreativeHandoff(items);setTab("bulkImages")}} incoming={studioRows}/>}
       {tab==="creator"&&<>
         <QuickPostStudio categories={categories} library={library} editorialProfile={useEditorialProfile?editorialProfile:null} onSaveItems={saveFactoryItems} onSchedule={({text,category})=>{setPublisherPrefill({text,category,nonce:Date.now()});setTab("publisher")}}/>
         <PrayerReelGenerator/>
@@ -388,7 +390,7 @@ function EfimeroShell(){
 
       {tab==="radar"&&<InspirationRadar library={library} onSaveItems={saveFactoryItems} onOpenLearningAgent={()=>setTab("learningAgent")}/>}
 
-      {tab==="learningAgent"&&<LearningAgent onSaveItems={saveFactoryItems} onQueue={(items:any[])=>{setSchedule(current=>[...current,...items] as ScheduleItem[]);setTab("queue")}} onOpenRadar={()=>setTab("radar")}/>}
+      {tab==="learningAgent"&&<LearningAgent onSaveItems={saveFactoryItems} onQueue={(items:any[])=>{setSchedule(current=>[...current,...items] as ScheduleItem[]);setTab("queue")}} onOpenRadar={()=>setTab("radar")} onSendToStudio={rows=>{setStudioRows({rows,source:"Learning Agent",nonce:Date.now()});setTab("creativeStudio")}}/>}
 
       {tab==="health"&&<SystemHealth schedule={schedule} library={library}/>}
       {tab==="control"&&<ControlCenter onNavigate={(next)=>setTab(next as Tab)}/>}

@@ -20,8 +20,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const objective = String(body.objective || "Crear textos frescos y naturales para Facebook").trim().slice(0, 600);
   const category = String(body.category || "").trim().slice(0, 120);
-  const count = Math.max(1, Math.min(12, Number(body.count || 6)));
+  const count = Math.max(1, Math.min(30, Number(body.count || 6)));
   const exploration = Math.max(0, Math.min(100, Number(body.exploration ?? 55)));
+  const imageFormat = body.format === "image";
+  const chosenExamples: string[] = (Array.isArray(body.examples) ? body.examples : []).map((x: unknown) => String(x || "").trim()).filter(Boolean).slice(0, 12);
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Falta OPENAI_API_KEY." }, { status: 500 });
   const model = process.env.OPENAI_MODEL || "gpt-5-mini";
@@ -84,13 +86,30 @@ export async function POST(request: NextRequest) {
       ? ownExamples.slice(0, 8).map((item, index) => `${index + 1}. [${String(item.category || "General")}] ${compactExample(item.text)}`).join("\n")
       : "No hay suficientes ejemplos propios indexados todavía. Prioriza naturalidad y novedad.";
 
+    // Ejemplos ganadores: los que eligió el usuario o, si no eligió, los de mayor interacción relativa.
+    let winners = chosenExamples;
+    if (!winners.length) {
+      const { data } = await db.from("efimero_learning_documents")
+        .select("source_text")
+        .eq("owner_user_id", user.id)
+        .order("engagement_score", { ascending: false })
+        .limit(12);
+      winners = (data || []).map((x: any) => String(x.source_text || "").trim()).filter(Boolean);
+    }
+    const winnerContext = winners.length
+      ? winners.map((text, index) => `${index + 1}. ${compactExample(text, 220)}`).join("\n")
+      : "Sin ejemplos todavía.";
+    const formatInstruction = imageFormat
+      ? "FORMATO: frase para imagen estilo tuit. De 1 a 4 líneas, máximo 220 caracteres. Sin hashtags ni comillas. Como máximo un emoji y solo al final. Lenguaje cotidiano, directo, que alguien quiera mandarle a otra persona porque se siente identificado."
+      : "FORMATO: copy de texto para publicación de Facebook.";
+
     const explorationInstruction = exploration <= 30
       ? "Sé conservador: usa estructuras probadas, pero cambia formulación y tema lo suficiente para que cada texto sea original."
       : exploration >= 75
         ? "Explora combinaciones nuevas: conserva mecanismos abstractos, pero cambia bastante tema, ritmo, apertura y estructura superficial."
         : "Equilibra patrones probados con novedad real. No repitas formulaciones ni remates.";
 
-    const prompt = `Eres el Learning Agent editorial de Efímero. Genera ${count} copys ORIGINALES para Facebook.\n\nOBJETIVO:\n${objective}\n${category ? `Categoría solicitada: ${category}` : "Categoría: elige la más adecuada según los patrones."}\nNivel de exploración: ${exploration}/100. ${explorationInstruction}\n\nJERARQUÍA DE CONOCIMIENTO:\n1) La voz y los ejemplos PROPIOS de Efímero mandan sobre cualquier fuente externa.\n2) Los patrones EXTERNOS solo sirven para abstraer estructuras, hooks y mecanismos.\n3) Introduce novedad; no conviertas el resultado en una paráfrasis.\n\nPATRONES EXTERNOS APRENDIDOS (NO son textos para copiar):\n${patternContext}\n\nMEMORIA PROPIA / RAG DE EFÍMERO:\n${ownContext}\n\nREGLAS OBLIGATORIAS:\n- No copies frases distintivas, metáforas, secuencias de palabras ni cierres de páginas externas.\n- No menciones las páginas fuente.\n- Español natural de México.\n- No engagement bait: nada de pedir comentar, compartir, reaccionar, etiquetar, seguir o dar like.\n- Una pregunta natural sí es válida si el contenido funciona sin pedir interacción.\n- No clickbait ni promesas de viralidad.\n- Evita que todas las salidas usen la misma apertura.\n- Cada copy debe sostenerse por sí mismo.\n\nPara cada copy devuelve además una razón breve que explique qué patrón abstracto usó y qué cambió para mantener originalidad.`;
+    const prompt = `Eres el Learning Agent editorial de Efímero. Genera ${count} copys ORIGINALES para Facebook.\n\nOBJETIVO:\n${objective}\n${category ? `Categoría solicitada: ${category}` : "Categoría: elige la más adecuada según los patrones."}\nNivel de exploración: ${exploration}/100. ${explorationInstruction}\n${formatInstruction}\n\nJERARQUÍA DE CONOCIMIENTO:\n1) La voz y los ejemplos PROPIOS de Efímero mandan sobre cualquier fuente externa.\n2) Los patrones EXTERNOS solo sirven para abstraer estructuras, hooks y mecanismos.\n3) Introduce novedad; no conviertas el resultado en una paráfrasis.\n\nPATRONES EXTERNOS APRENDIDOS (NO son textos para copiar):\n${patternContext}\n\nPUBLICACIONES EXTERNAS CON MÁS INTERACCIÓN (solo para captar tono, longitud y emoción; PROHIBIDO copiarlas, parafrasearlas o reutilizar sus remates):\n${winnerContext}\n\nMEMORIA PROPIA / RAG DE EFÍMERO:\n${ownContext}\n\nREGLAS OBLIGATORIAS:\n- No copies frases distintivas, metáforas, secuencias de palabras ni cierres de páginas externas.\n- No menciones las páginas fuente.\n- Español natural de México.\n- No engagement bait: nada de pedir comentar, compartir, reaccionar, etiquetar, seguir o dar like.\n- Una pregunta natural sí es válida si el contenido funciona sin pedir interacción.\n- No clickbait ni promesas de viralidad.\n- Evita que todas las salidas usen la misma apertura.\n- Cada copy debe sostenerse por sí mismo.\n\nPara cada copy devuelve además una razón breve que explique qué patrón abstracto usó y qué cambió para mantener originalidad.`;
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -109,7 +128,7 @@ export async function POST(request: NextRequest) {
                 items: {
                   type: "array",
                   minItems: 1,
-                  maxItems: 12,
+                  maxItems: 30,
                   items: {
                     type: "object",
                     additionalProperties: false,
@@ -177,7 +196,7 @@ export async function POST(request: NextRequest) {
 
       const externalSemantic = Math.max(0, ...externalNearest.map(item => Number(item.similarity || 0)));
       const ownSemantic = Math.max(0, ...ownNearest.map(item => Number(item.similarity || 0)));
-      const externalLexical = Math.max(0, ...externalNearest.map(item => lexicalSimilarity(text, String(item.source_text || ""))));
+      const externalLexical = Math.max(0, ...externalNearest.map(item => lexicalSimilarity(text, String(item.source_text || ""))), ...winners.map(example => lexicalSimilarity(text, example)));
       const ownLexical = Math.max(0, ...ownNearest.map(item => lexicalSimilarity(text, String(item.text || ""))));
       const duplicateRisk = externalSemantic >= 0.88 || externalLexical >= 0.5 || ownSemantic >= 0.95 || ownLexical >= 0.72;
       const novelty = Math.max(0, Math.min(100, Math.round(100 - Math.max(externalSemantic * 92, externalLexical * 100, Math.max(0, ownSemantic - 0.72) * 120))));

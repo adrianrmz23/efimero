@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/serverAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { retrieveBrightDataSnapshot, startBrightDataFacebookScrape, type BrightDataPost } from "@/lib/brightData";
+import { postImageUrl, readImageTexts, type ImageOcr } from "@/lib/imageText";
 
 function isFacebookUrl(value: string) {
   try {
@@ -11,8 +12,19 @@ function isFacebookUrl(value: string) {
   } catch { return false; }
 }
 
-async function persistPosts(ownerUserId: string, watchlistId: string, posts: BrightDataPost[]) {
+// Conserva la frase ya leída de cada imagen y lee solo las nuevas.
+async function withImageTexts(db: ReturnType<typeof getSupabaseAdmin>, watchlistId: string, posts: BrightDataPost[]) {
+  const { data } = await db.from("efimero_inspiration_posts").select("provider_post_id,ocr:raw->efimero_ocr").eq("watchlist_id", watchlistId).in("provider_post_id", posts.map(post => post.providerPostId));
+  const known = new Map((data || []).filter((row: any) => row.ocr).map((row: any) => [String(row.provider_post_id), row.ocr as ImageOcr]));
+  const pending = posts.filter(post => !known.has(post.providerPostId) && postImageUrl(post.raw));
+  const results = await readImageTexts(pending.map(post => postImageUrl(post.raw)));
+  pending.forEach((post, i) => { const ocr = results[i]; if (ocr) known.set(post.providerPostId, ocr); });
+  return posts.map(post => { const ocr = known.get(post.providerPostId); return ocr ? { ...post, raw: { ...post.raw, efimero_ocr: ocr } } : post; });
+}
+
+async function persistPosts(ownerUserId: string, watchlistId: string, incoming: BrightDataPost[]) {
   const db = getSupabaseAdmin();
+  const posts = incoming.length ? await withImageTexts(db, watchlistId, incoming) : incoming;
   if (posts.length) {
     const rows = posts.map(post => ({
       owner_user_id: ownerUserId,

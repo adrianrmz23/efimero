@@ -250,3 +250,20 @@
   .inspWatchMain{flex:1 1 160px}
   .learnWeights>div{padding:12px}
 }
+/* Learning Agent · publicaciones ganadoras */
+.learnWinnerGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:16px;max-height:760px;overflow:auto;scrollbar-width:thin}
+.learnWinner{display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-bg);transition:border-color .15s var(--ui-ease),background .15s var(--ui-ease)}
+.learnWinner.picked{border-color:var(--ui-border-strong);background:var(--ui-surface-2)}
+.learnWinnerTop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.learnWinnerRank{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--ui-text-2);font-variant-numeric:tabular-nums}
+.learnWinnerImg{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;border:1px solid var(--ui-border);border-radius:var(--ui-r-sm);background:var(--ui-surface)}
+.learnWinner>p{flex:1;margin:0;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;line-height:1.55;color:var(--ui-text)}
+.learnWinnerMetrics{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ui-text-2);font-variant-numeric:tabular-nums}
+.learnWinnerMetrics span{display:inline-flex;align-items:center;gap:4px}
+.learnWinnerFoot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--ui-border);font-size:12px;color:var(--ui-text-3)}
+.learnWinnerFoot span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.learnWinnerFoot a{display:inline-flex;color:var(--ui-text-2)}
+.learnWinnerFoot a:hover{color:var(--ui-text)}
+.learnWinnerPick{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ui-text-2);cursor:pointer}
+.learnWinnerPick .inspCheck{margin:0}
+.inspHeadActions select{width:auto;min-width:160px}

@@ -251,3 +251,37 @@
   .studioVisualGrid,.studioReelGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .studioStep{padding:14px 16px}
 }
+
+/* Importación desde Excel/CSV */
+.studioImportBar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.studioImportBar .studioHint{flex:1 1 100%;font-size:12px;line-height:1.5;color:var(--ui-text-3)}
+.studioImportBar b{font-weight:600;color:var(--ui-text-2)}
+.studioRows{display:flex;flex-direction:column;gap:12px}
+.studioRowsHead{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.studioRowsHead strong{font-size:13px;font-weight:600}
+.studioRows ol{display:flex;flex-direction:column;gap:8px;max-height:520px;margin:0;padding:0;overflow:auto;list-style:none}
+.studioRows li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-bg)}
+.studioRowIndex{display:grid;place-items:center;width:24px;height:24px;margin-top:6px;border-radius:999px;background:var(--ui-surface-3);font-size:12px;font-weight:600;color:var(--ui-text-2);font-variant-numeric:tabular-nums}
+.studioRowFields{display:flex;flex-direction:column;gap:8px;min-width:0}
+.studioRowFields textarea{min-height:0;font-size:13px;line-height:1.55}
+.studioRowFields small{font-size:12px;color:var(--ui-text-3)}
+.studioManual summary{cursor:pointer;width:max-content;font-size:13px;font-weight:500;color:var(--ui-text-2)}
+.studioManual[open] summary{margin-bottom:12px}
+.studioGallery figure{position:relative}
+.studioGalleryRemove{position:absolute;top:6px;right:6px;width:24px;height:24px;display:grid;place-items:center;border:0;border-radius:999px;background:rgba(0,0,0,.7);color:#fff;opacity:0;transition:opacity .15s}
+.studioGallery figure:hover .studioGalleryRemove,.studioGalleryRemove:focus-visible{opacity:1}
+@media(max-width:720px){.studioRows li{grid-template-columns:minmax(0,1fr) auto}.studioRowIndex{display:none}}
+/* Revisión por fila: Compliance, repetidas y regenerar */
+.studioRowsActions{display:flex;align-items:center;gap:16px}
+.studioFooterActions{display:flex;align-items:center;gap:8px}
+.studioRows li.flagged{border-color:var(--ui-danger-border)}
+.studioRows li.repeated{border-color:var(--ui-warning-border)}
+.studioRowChecks{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.studioChip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 8px;border:1px solid var(--ui-border);border-radius:999px;background:var(--ui-surface-2);font-size:12px;line-height:1.4;color:var(--ui-text-2)}
+.studioChip.ok{border-color:var(--ui-success-border);background:var(--ui-success-soft);color:var(--ui-success)}
+.studioChip.warn{border-color:var(--ui-warning-border);background:var(--ui-warning-soft);color:var(--ui-warning)}
+.studioChip.error{border-color:var(--ui-danger-border);background:var(--ui-danger-soft);color:var(--ui-danger)}
+.studioChip svg{flex:none}
+.studioRowChecks .linkButton{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.studioGallery figure.flagged img{border-color:var(--ui-danger-border)}
+.studioGallery figure.flagged figcaption b{color:var(--ui-danger)}
