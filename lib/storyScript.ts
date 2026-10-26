@@ -5,8 +5,8 @@ export type TimedWord = { text: string; start: number; end: number };
 
 export const STORY_STYLES: Record<string, { label: string; prompt: string }> = {
   cartoon: { label: "Caricatura de cómic", prompt: "2D cartoon comic illustration, bold clean black outlines, flat colors with soft gradients, expressive faces, cinematic dramatic lighting" },
-  realistic: { label: "Ilustración realista", prompt: "semi-realistic digital painting, cinematic lighting, detailed, dramatic atmosphere" },
-  anime: { label: "Anime", prompt: "anime illustration, clean line art, cel shading, vivid colors, cinematic composition" },
+  realistic: { label: "Ilustración realista", prompt: "realistic cinematic digital painting like movie concept art, painterly brushwork, realistic human proportions and skin textures, soft volumetric light, no outlines, not cartoon, not comic" },
+  anime: { label: "Anime", prompt: "Japanese anime film still, hand-drawn anime style, soft cel shading, large expressive anime eyes, detailed painted background, warm cinematic light" },
   watercolor: { label: "Acuarela", prompt: "watercolor storybook illustration, soft textured paper, warm muted colors" },
 };
 export const styleSuffix = (style: string) => `${(STORY_STYLES[style] || STORY_STYLES.cartoon).prompt}, single full-bleed vertical 9:16 illustration, no comic panels, no borders, no frames, no text, no letters, no watermark.`;

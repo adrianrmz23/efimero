@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, Clapperboard, Copy, Download, FileText, ImagePlus, Loader2, Mic, Sparkles, Trash2, UserRound, Video } from "lucide-react";
-import { renderReel } from "@/lib/reelRender";
+import { renderReel, type ReelTransition } from "@/lib/reelRender";
 import { FICTION_BADGE, STORY_STYLES, healingClaims, narrationOf, sceneDurationsFromWords, styleSuffix, type StoryKind, type StoryScript, type TimedWord } from "@/lib/storyScript";
 import { useConfirm } from "@/components/ui/DialogProvider";
 
@@ -23,6 +23,7 @@ export default function StoryStudio() {
   const confirm = useConfirm();
   const [topic, setTopic] = useState("");
   const [kind, setKind] = useState<StoryKind>("real");
+  const [transition, setTransition] = useState<ReelTransition>("dissolve");
   const [sceneCount, setSceneCount] = useState(8);
   const [style, setStyle] = useState("cartoon");
   const [voiceName, setVoiceName] = useState("Charon");
@@ -127,7 +128,7 @@ export default function StoryStudio() {
       const durations = sceneDurationsFromWords(script.scenes.map(s => s.text), voice.words, voice.duration);
       const scenes = script.scenes.map((s, i) => ({ image: media[i]?.image || "", video: media[i]?.video, caption: "", duration: durations[i] }));
       if (scenes.some(s => !s.image)) throw new Error("Faltan ilustraciones. Créalas antes de generar el video.");
-      const { blob, type } = await renderReel(scenes, { title: script.title, voice: voice.blob, subtitles: voice.words, badge: scriptKind === "fiction" ? FICTION_BADGE : undefined }, setProgress);
+      const { blob, type } = await renderReel(scenes, { title: script.title, voice: voice.blob, subtitles: voice.words, badge: scriptKind === "fiction" ? FICTION_BADGE : undefined, transition }, setProgress);
       setOutput({ url: URL.createObjectURL(blob), type });
     } catch (e: any) { setError(e?.message || "No se pudo generar el video."); } finally { setBusy(""); }
   }
@@ -191,6 +192,7 @@ export default function StoryStudio() {
           {voice && <span className="studioHint"><Check size={13} /> {voice.words.length} palabras sincronizadas · {voice.duration.toFixed(1)} s</span>}
         </div></div>
 
+        <div className="storyStep"><span className="storyNum">5</span><div><label className="field"><span>Transición</span><select value={transition} onChange={e => { setTransition(e.target.value as ReelTransition); setOutput(null); }}><option value="dissolve">Disolución suave (recomendada)</option><option value="black">Fundido a negro (dramática)</option><option value="cut">Corte directo</option></select></label></div></div>
         <div className="actionBar reelActions"><button type="button" className="uiBtn uiBtnPrimary" onClick={() => void render()} disabled={!ready || !!busy}>{busy === "render" ? <Loader2 className="spin" size={16} /> : <Clapperboard size={16} />} {busy === "render" ? `Generando… ${Math.round(progress * 100)}%` : "Generar video"}</button>{!ready && <span className="studioHint">Necesitas las ilustraciones y la voz.</span>}</div>
       </>}
     </section>

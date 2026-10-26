@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import "@fontsource/inter/700.css";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Clapperboard, Download, Film, ImagePlus, Loader2, Mic, Music, Sparkles, Trash2, Video, Wand2, X } from "lucide-react";
-import { renderReel, type ReelScene } from "@/lib/reelRender";
+import { renderReel, type ReelScene, type ReelTransition } from "@/lib/reelRender";
 import { totalDuration } from "@/lib/reelTimeline";
 import { TRANSFORM_PRESETS, beforePrompt, transformPrompt } from "@/lib/transformPresets";
 import { DEFAULT_HOUSE_STYLE, ROOM_PRESETS, roomImagePrompt, roomMotionPrompt } from "@/lib/walkthroughPresets";
@@ -45,7 +45,7 @@ export default function ReelStudio(){
   const [mode,setMode]=useState<Mode>("walkthrough");
   const confirm=useConfirm();
   // Recorrido
-  const [scenes,setScenes]=useState<Scene[]>([]);const [title,setTitle]=useState("Casa de 6 m de frente ✅");const [music,setMusic]=useState<File|null>(null);
+  const [scenes,setScenes]=useState<Scene[]>([]);const [title,setTitle]=useState("Casa de 6 m de frente ✅");const [music,setMusic]=useState<File|null>(null);const [transition,setTransition]=useState<ReelTransition>("dissolve");
   const [rendering,setRendering]=useState(false);const [progress,setProgress]=useState(0);const [output,setOutput]=useState<{url:string;type:string}|null>(null);
   const imagesRef=useRef<HTMLInputElement>(null);const musicRef=useRef<HTMLInputElement>(null);
   const [houseStyle,setHouseStyle]=useState(DEFAULT_HOUSE_STYLE);const [rooms,setRooms]=useState<string[]>(ROOM_PRESETS.map(r=>r.id));const [generating,setGenerating]=useState("");
@@ -113,7 +113,7 @@ export default function ReelStudio(){
   function moveScene(i:number,dir:-1|1){setScenes(cur=>{const next=[...cur];const j=i+dir;if(j<0||j>=next.length)return cur;[next[i],next[j]]=[next[j],next[i]];return next});setOutput(null)}
   async function render(){
     setRendering(true);setProgress(0);setError("");setOutput(null);
-    try{const {blob,type}=await renderReel(scenes,{title,music,voice:voiceBlob},setProgress);setOutput({url:URL.createObjectURL(blob),type})}
+    try{const {blob,type}=await renderReel(scenes,{title,music,voice:voiceBlob,transition},setProgress);setOutput({url:URL.createObjectURL(blob),type})}
     catch(e:any){setError(e?.message||"No se pudo generar el reel.")}finally{setRendering(false)}
   }
 
@@ -171,6 +171,7 @@ export default function ReelStudio(){
           <label className="field"><span><Mic size={14}/> Voz en off <small>opcional</small></span><textarea rows={3} maxLength={1500} value={narration} onChange={e=>{setNarration(e.target.value);setVoiceBlob(null);setVoiceUrl("")}} placeholder="Esta casa tiene solo 6 metros de frente, pero mira todo lo que cabe adentro…"/></label>
           <div className="reelToolbar"><select aria-label="Voz" value={voice} onChange={e=>{setVoice(e.target.value);setVoiceBlob(null);setVoiceUrl("")}}>{VOICES.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><button type="button" className="uiBtn uiBtnSecondary" onClick={()=>void generateVoice()} disabled={!narration.trim()||voiceBusy||rendering}>{voiceBusy?<Loader2 className="spin" size={16}/>:<Mic size={16}/>} Generar voz</button>{voiceUrl&&<audio src={voiceUrl} controls/>}</div>
         </div>
+        <label className="field"><span>Transición</span><select value={transition} onChange={e =>{ setTransition(e.target.value as ReelTransition); setOutput(null); }}><option value="dissolve">Disolución suave (recomendada)</option><option value="black">Fundido a negro (dramática)</option><option value="cut">Corte directo</option></select></label>
         <p className="settingsHint">Usa música libre de derechos (por ejemplo, la biblioteca de audio de YouTube o Pixabay Music). Mientras se genera, deja esta pestaña abierta y visible.</p>
         <div className="actionBar reelActions"><button type="button" className="uiBtn uiBtnPrimary" onClick={()=>void render()} disabled={!scenes.length||rendering}>{rendering?<Loader2 className="spin" size={16}/>:<Clapperboard size={16}/>} {rendering?`Generando… ${Math.round(progress*100)}%`:"Generar reel"}</button></div>
       </section>

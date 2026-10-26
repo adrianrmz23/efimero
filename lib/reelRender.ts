@@ -8,7 +8,11 @@ import { subtitleGroups, type TimedWord } from "@/lib/storyScript";
 export type ReelScene = { image: string; caption: string; duration: number; video?: string };
 // `subtitles`: palabras de la voz con su tiempo (desde que empieza la voz); se dibujan estilo karaoke abajo.
 // `badge`: aviso pequeño fijo durante todo el video (por ejemplo, «Relato inspirador» en historias de ficción).
-export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; badge?: string; fade?: number; fps?: number };
+// `transition`: cómo pasa una escena a la siguiente. "dissolve" mezcla suave con un ligero acercamiento,
+// "black" funde a negro (para momentos dramáticos) y "cut" es corte directo.
+export type ReelTransition = "dissolve" | "black" | "cut";
+export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; badge?: string; transition?: ReelTransition; fade?: number; fps?: number };
+const ease = (x: number) => x * x * (3 - 2 * x);
 const VOICE_OFFSET = .4;
 
 const W = 1080, H = 1920;
@@ -97,11 +101,12 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
     if (scene.video) { const el = await loadVideo(scene.video); return { kind: "video" as const, el, w: el.videoWidth, h: el.videoHeight }; }
     const el = await loadImage(scene.image); return { kind: "image" as const, el, w: el.width, h: el.height };
   }));
-  // La duración de cada escena manda (la voz depende de ella). Si un clip es más corto, se reproduce más lento
-  // (hasta la mitad de velocidad) y, si aun así no alcanza, se queda en su último cuadro.
+  // La duración de cada escena manda (la voz depende de ella). Si un clip es más corto, se reproduce un poco más lento
+  // (sin bajar de 0.75× para que no se vea en cámara lenta) y, al terminar, su último cuadro sigue con un acercamiento suave.
   const durations = scenes.map(scene => Math.max(1.5, scene.duration));
-  sources.forEach((s, i) => { if (s.kind === "video" && Number.isFinite(s.el.duration) && s.el.duration > 0) s.el.playbackRate = Math.max(.5, Math.min(1, s.el.duration / durations[i])); });
-  const fade = options.fade ?? .6, fps = options.fps ?? 30;
+  sources.forEach((s, i) => { if (s.kind === "video" && Number.isFinite(s.el.duration) && s.el.duration > 0) s.el.playbackRate = Math.max(.75, Math.min(1, s.el.duration / durations[i])); });
+  const transition = options.transition || "dissolve";
+  const fade = transition === "cut" ? .001 : options.fade ?? (transition === "black" ? .8 : 1), fps = options.fps ?? 30;
   const groups = options.subtitles?.length ? subtitleGroups(options.subtitles) : [];
   const total = totalDuration(durations);
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
@@ -150,10 +155,20 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
     const frame = sceneAt(t, durations, fade);
     syncVideos(new Set(frame.next !== null && frame.mix > 0 ? [frame.index, frame.next] : [frame.index]));
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
-    const current = sources[frame.index];
-    const a = current.kind === "video" ? { scale: 1, dx: 0, dy: 0 } : kenBurns(frame.progress, frame.index);
-    drawCover(ctx, current, a.scale, a.dx, a.dy, 1);
-    if (frame.next !== null && frame.mix > 0) { const next = sources[frame.next]; const b = next.kind === "video" ? { scale: 1, dx: 0, dy: 0 } : kenBurns(0, frame.next); drawCover(ctx, next, b.scale, b.dx, b.dy, frame.mix); }
+    // Los clips llevan un acercamiento muy leve durante toda la escena: así no se nota si el video termina antes.
+    const motion = (i: number, progress: number) => sources[i].kind === "video" ? { scale: 1 + .05 * progress, dx: 0, dy: 0 } : kenBurns(progress, i);
+    const mix = ease(frame.mix);
+    const a = motion(frame.index, frame.progress);
+    const next = frame.next !== null && frame.mix > 0 ? frame.next : null;
+    if (next !== null && transition === "black") {
+      // Fundido a negro: la escena sale a negro y la siguiente entra desde negro.
+      if (mix < .5) drawCover(ctx, sources[frame.index], a.scale, a.dx, a.dy, 1 - mix * 2);
+      else { const b = motion(next, 0); drawCover(ctx, sources[next], b.scale, b.dx, b.dy, (mix - .5) * 2); }
+    } else {
+      drawCover(ctx, sources[frame.index], a.scale, a.dx, a.dy, 1);
+      // Disolución: la siguiente entra un poco más cerca y se asienta mientras aparece; la anterior sigue moviéndose debajo.
+      if (next !== null) { const b = motion(next, 0); drawCover(ctx, sources[next], b.scale * (1 + .06 * (1 - mix)), b.dx, b.dy, mix); }
+    }
     // Degradado arriba para que el texto se lea sobre cualquier imagen.
     const shade = ctx.createLinearGradient(0, 0, 0, H * .42); shade.addColorStop(0, "rgba(0,0,0,.45)"); shade.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H * .42);
