@@ -20,18 +20,13 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, width: number) {
 
 export const cardBackgroundPrompt = "Ornate vintage parchment prayer card background, aged cream paper texture, a glowing white dove with golden light rays at the top center, white lilies and soft gold ornaments framing the corners and sides, large empty plain parchment area in the center for text, soft warm light, highly detailed, vertical 9:16, absolutely no text, no letters, no words.";
 
-export async function renderPrayerCard(background: string, title: string, body: string) {
-  if (typeof document !== "undefined" && document.fonts) { try { await document.fonts.load(`700 80px ${SERIF}`); } catch { /* Fuente del sistema. */ } }
-  const img = await loadImage(background);
-  const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("No se pudo iniciar el lienzo.");
-  const ratio = Math.max(W / img.width, H / img.height);
-  ctx.drawImage(img, (W - img.width * ratio) / 2, (H - img.height * ratio) / 2, img.width * ratio, img.height * ratio);
+// Escribe el velo, el título y la oración. Se usa sobre el fondo (tarjeta fija) o sobre un lienzo vacío
+// (capa transparente que va encima del fondo animado, para que las letras no se deformen).
+function drawText(ctx: CanvasRenderingContext2D, title: string, body: string) {
   // Velo cálido en el centro para que el texto siempre se lea, aunque el fondo tenga detalles.
   const veil = ctx.createRadialGradient(W / 2, H * .55, 80, W / 2, H * .55, W * .62);
   veil.addColorStop(0, "rgba(250,240,218,.82)"); veil.addColorStop(1, "rgba(250,240,218,0)");
   ctx.fillStyle = veil; ctx.fillRect(0, 0, W, H);
-
   const textW = W * .68, top = H * .2, bottomLimit = H * .88;
   ctx.textAlign = "center"; ctx.textBaseline = "top";
   // Título grande en dos líneas como máximo.
@@ -55,5 +50,26 @@ export async function renderPrayerCard(background: string, title: string, body: 
       ctx.textAlign = "center";
     } else { ctx.fillStyle = isAmen ? "#8b1a1a" : "#2b1d10"; ctx.fillText(l, W / 2, y); }
   });
-  return canvas.toDataURL("image/jpeg", .92);
 }
+
+// Devuelve la tarjeta completa (JPG) y la capa de texto sola (PNG transparente).
+export async function renderPrayerCardLayers(background: string, title: string, body: string) {
+  if (typeof document !== "undefined" && document.fonts) { try { await document.fonts.load(`700 80px ${SERIF}`); } catch { /* Fuente del sistema. */ } }
+  const img = await loadImage(background);
+  const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("No se pudo iniciar el lienzo.");
+  const ratio = Math.max(W / img.width, H / img.height);
+  ctx.drawImage(img, (W - img.width * ratio) / 2, (H - img.height * ratio) / 2, img.width * ratio, img.height * ratio);
+  drawText(ctx, title, body);
+  const layer = document.createElement("canvas"); layer.width = W; layer.height = H;
+  const lctx = layer.getContext("2d"); if (!lctx) throw new Error("No se pudo iniciar el lienzo.");
+  drawText(lctx, title, body);
+  return { image: canvas.toDataURL("image/jpeg", .92), overlay: layer.toDataURL("image/png") };
+}
+
+export async function renderPrayerCard(background: string, title: string, body: string) {
+  return (await renderPrayerCardLayers(background, title, body)).image;
+}
+
+// Movimiento del fondo de la tarjeta: cámara fija para que la capa de texto siga alineada.
+export const cardMotionPrompt = "The white dove gently flaps its wings while hovering in place, golden light rays softly shimmer and pulse, white lilies sway slightly in a gentle breeze, a few soft sparkles drift. Static camera, no zoom, keep the parchment, ornaments and composition exactly the same, the center stays empty plain parchment, no text, no letters.";

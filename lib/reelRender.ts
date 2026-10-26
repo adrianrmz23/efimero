@@ -5,7 +5,9 @@ import { kenBurns, sceneAt, totalDuration } from "@/lib/reelTimeline";
 import { subtitleGroups, type TimedWord } from "@/lib/storyScript";
 
 // `video` es un clip de recorrido generado con IA (URL del mismo origen o blob:). Si existe, sustituye la imagen.
-export type ReelScene = { image: string; caption: string; duration: number; video?: string };
+// `loop`: el clip se repite con un fundido suave entre vueltas (para fondos que se ven mucho tiempo, como la tarjeta de oración).
+// `overlay`: imagen transparente que va encima con el mismo encuadre (el texto de la tarjeta sobre su fondo animado).
+export type ReelScene = { image: string; caption: string; duration: number; video?: string; loop?: boolean; overlay?: string };
 // `subtitles`: palabras de la voz con su tiempo (desde que empieza la voz); se dibujan estilo karaoke abajo.
 // `badge`: aviso pequeño fijo durante todo el video (por ejemplo, «Relato inspirador» en historias de ficción).
 // `transition`: cómo pasa una escena a la siguiente. "dissolve" mezcla suave con un ligero acercamiento,
@@ -20,7 +22,9 @@ const VOICE_OFFSET = .4;
 
 const W = 1080, H = 1920;
 const FONT = 'Inter, "Segoe UI", Arial, sans-serif';
-type Source = { kind: "image"; el: HTMLImageElement; w: number; h: number } | { kind: "video"; el: HTMLVideoElement; w: number; h: number };
+// En los clips en bucle, `alt` es una segunda copia que entra con fundido mientras la primera termina.
+type Source = { kind: "image"; el: HTMLImageElement; w: number; h: number } | { kind: "video"; el: HTMLVideoElement; w: number; h: number; alt?: HTMLVideoElement; fading?: boolean };
+const LOOP_FADE = .8;
 
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error("No se pudo cargar una imagen.")); img.src = src; });
@@ -112,13 +116,14 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
   if (!scenes.length) throw new Error("Agrega al menos una escena.");
   if (typeof document !== "undefined" && document.fonts) { try { await document.fonts.load(`700 64px Inter`); } catch { /* Fuente de respaldo. */ } }
   const sources: Source[] = await Promise.all(scenes.map(async scene => {
-    if (scene.video) { const el = await loadVideo(scene.video); return { kind: "video" as const, el, w: el.videoWidth, h: el.videoHeight }; }
+    if (scene.video) { const el = await loadVideo(scene.video); return { kind: "video" as const, el, w: el.videoWidth, h: el.videoHeight, alt: scene.loop ? await loadVideo(scene.video) : undefined }; }
     const el = await loadImage(scene.image); return { kind: "image" as const, el, w: el.width, h: el.height };
   }));
   // La duración de cada escena manda (la voz depende de ella). Si un clip es más corto, se reproduce un poco más lento
   // (sin bajar de 0.75× para que no se vea en cámara lenta) y, al terminar, su último cuadro sigue con un acercamiento suave.
   const durations = scenes.map(scene => Math.max(1.5, scene.duration));
-  sources.forEach((s, i) => { if (s.kind === "video" && Number.isFinite(s.el.duration) && s.el.duration > 0) s.el.playbackRate = Math.max(.75, Math.min(1, s.el.duration / durations[i])); });
+  const overlays = await Promise.all(scenes.map(async scene => { if (!scene.overlay) return null; const el = await loadImage(scene.overlay); return { kind: "image" as const, el, w: el.width, h: el.height }; }));
+  sources.forEach((s, i) => { if (s.kind === "video" && !s.alt && Number.isFinite(s.el.duration) && s.el.duration > 0) s.el.playbackRate = Math.max(.75, Math.min(1, s.el.duration / durations[i])); });
   const transition = options.transition || "dissolve";
   const fade = transition === "cut" ? .001 : options.fade ?? (transition === "black" ? .8 : 1), fps = options.fps ?? 30;
   const groups = options.subtitles?.length ? subtitleGroups(options.subtitles) : [];
@@ -161,9 +166,25 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
   // Los clips se reproducen solo mientras se ven (escena actual o la siguiente durante la transición).
   const syncVideos = (visible: Set<number>) => sources.forEach((s, i) => {
     if (s.kind !== "video") return;
-    if (visible.has(i)) { if (s.el.paused && !s.el.ended) void s.el.play().catch(() => {}); }
-    else if (!s.el.paused) s.el.pause();
+    if (visible.has(i)) { if (s.el.paused && !s.el.ended) void s.el.play().catch(() => {}); if (s.fading && s.alt?.paused) void s.alt.play().catch(() => {}); }
+    else { if (!s.el.paused) s.el.pause(); if (s.alt && !s.alt.paused) s.alt.pause(); }
   });
+
+  // Dibuja una escena; en los clips en bucle, la copia entra con fundido al final y luego toma su lugar.
+  const drawSource = (i: number, scale: number, dx: number, dy: number, alpha: number) => {
+    const s = sources[i];
+    drawCover(ctx, s, scale, dx, dy, alpha);
+    if (s.kind === "video" && s.alt && Number.isFinite(s.el.duration)) {
+      const left = s.el.duration - s.el.currentTime;
+      if (left <= LOOP_FADE || s.el.ended) {
+        if (!s.fading) { s.fading = true; s.alt.currentTime = 0; void s.alt.play().catch(() => {}); }
+        const mixIn = s.el.ended ? 1 : 1 - left / LOOP_FADE;
+        drawCover(ctx, { kind: "video", el: s.alt, w: s.w, h: s.h }, scale, dx, dy, alpha * ease(Math.min(1, mixIn)));
+        if (mixIn >= 1) { const old = s.el; old.pause(); s.el = s.alt; s.alt = old; s.fading = false; }
+      }
+    }
+    const over = overlays[i]; if (over) drawCover(ctx, over, scale, dx, dy, alpha);
+  };
 
   const draw = (t: number) => {
     const frame = sceneAt(t, durations, fade);
@@ -176,12 +197,12 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
     const next = frame.next !== null && frame.mix > 0 ? frame.next : null;
     if (next !== null && transition === "black") {
       // Fundido a negro: la escena sale a negro y la siguiente entra desde negro.
-      if (mix < .5) drawCover(ctx, sources[frame.index], a.scale, a.dx, a.dy, 1 - mix * 2);
-      else { const b = motion(next, 0); drawCover(ctx, sources[next], b.scale, b.dx, b.dy, (mix - .5) * 2); }
+      if (mix < .5) drawSource(frame.index, a.scale, a.dx, a.dy, 1 - mix * 2);
+      else { const b = motion(next, 0); drawSource(next, b.scale, b.dx, b.dy, (mix - .5) * 2); }
     } else {
-      drawCover(ctx, sources[frame.index], a.scale, a.dx, a.dy, 1);
+      drawSource(frame.index, a.scale, a.dx, a.dy, 1);
       // Disolución: la siguiente entra un poco más cerca y se asienta mientras aparece; la anterior sigue moviéndose debajo.
-      if (next !== null) { const b = motion(next, 0); drawCover(ctx, sources[next], b.scale * (1 + .06 * (1 - mix)), b.dx, b.dy, mix); }
+      if (next !== null) { const b = motion(next, 0); drawSource(next, b.scale * (1 + .06 * (1 - mix)), b.dx, b.dy, mix); }
     }
     // Degradado arriba para que el texto se lea sobre cualquier imagen.
     const shade = ctx.createLinearGradient(0, 0, 0, H * .42); shade.addColorStop(0, "rgba(0,0,0,.45)"); shade.addColorStop(1, "rgba(0,0,0,0)");
@@ -214,7 +235,7 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
       pausedAt = performance.now();
       if (recorder.state === "recording") recorder.pause();
       void audio?.suspend();
-      sources.forEach(s => { if (s.kind === "video") s.el.pause(); });
+      sources.forEach(s => { if (s.kind === "video") { s.el.pause(); s.alt?.pause(); } });
       options.onPauseChange?.(true);
     } else if (!document.hidden && pausedAt) {
       pausedMs += performance.now() - pausedAt; pausedAt = 0;
@@ -240,7 +261,7 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
   document.removeEventListener("visibilitychange", onVisibility);
   recorder.stop();
   await finished;
-  sources.forEach(s => { if (s.kind === "video") s.el.pause(); });
+  sources.forEach(s => { if (s.kind === "video") { s.el.pause(); s.alt?.pause(); } });
   stream.getTracks().forEach(track => track.stop());
   if (audio) await audio.close();
   return { blob: new Blob(chunks, { type: type.split(";")[0] }), type: type.split(";")[0] };

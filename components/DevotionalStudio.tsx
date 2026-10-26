@@ -5,7 +5,7 @@ import { AlertTriangle, Check, Clapperboard, Copy, Download, FileText, ImagePlus
 import { renderReel, type SubtitleStyle } from "@/lib/reelRender";
 import { sceneDurationsFromWords, type TimedWord } from "@/lib/storyScript";
 import { DEVOTIONAL_STYLES, devotionalSuffix, mergeVisuals, visualPlan, type DevotionalKind, type DevotionalScript } from "@/lib/devotional";
-import { cardBackgroundPrompt, renderPrayerCard } from "@/lib/prayerCard";
+import { cardBackgroundPrompt, cardMotionPrompt, renderPrayerCardLayers } from "@/lib/prayerCard";
 import { useConfirm } from "@/components/ui/DialogProvider";
 import CoverMaker from "@/components/CoverMaker";
 
@@ -42,7 +42,7 @@ export default function DevotionalStudio() {
   const [script, setScript] = useState<(DevotionalScript & { kind: DevotionalKind }) | null>(null);
   const [hero, setHero] = useState<Media>({});
   const [supports, setSupports] = useState<Media[]>([]);
-  const [card, setCard] = useState<{ background?: string; image?: string; status?: "working" | "error"; note?: string }>({});
+  const [card, setCard] = useState<{ background?: string; image?: string; overlay?: string; video?: string; status?: "working" | "error"; note?: string }>({});
   const [voice, setVoice] = useState<{ blob: Blob; url: string; duration: number; words: TimedWord[] } | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -57,7 +57,7 @@ export default function DevotionalStudio() {
   useEffect(() => {
     if (!script || !card.background) return;
     let alive = true;
-    void renderPrayerCard(card.background, script.cardTitle || script.title, cardBody(script.lines)).then(image => { if (alive) setCard(c => ({ ...c, image })); }).catch(e => { if (alive) setError(e?.message || "No se pudo dibujar la tarjeta."); });
+    void renderPrayerCardLayers(card.background, script.cardTitle || script.title, cardBody(script.lines)).then(layers => { if (alive) setCard(c => ({ ...c, ...layers })); }).catch(e => { if (alive) setError(e?.message || "No se pudo dibujar la tarjeta."); });
     return () => { alive = false; };
   }, [script, card.background]);
 
@@ -113,6 +113,21 @@ export default function DevotionalStudio() {
     } catch (e: any) { setHero(h => ({ ...h, status: "error", note: e?.message || "Error" })); }
   }
 
+  // Movimiento del fondo de la tarjeta (la paloma aletea, la luz brilla); el texto se dibuja encima en cada cuadro.
+  async function animateCard() {
+    if (!card.background || card.video) return;
+    if (!await confirm({ title: "¿Dar movimiento a la tarjeta?", description: "Se anima solo el fondo (paloma, luz y lirios) en un clip de 10 s que se repite con fundido; la oración se escribe encima y queda nítida. Aprox. 0.25 a 0.45 USD. Tarda de 1 a 4 minutos.", confirmLabel: "Dar movimiento" })) return;
+    setCard(c => ({ ...c, status: "working", note: "" }));
+    try {
+      const image = await shrink(card.background, 720, 1280, 270_000);
+      const r = await fetch("/api/media/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image, prompt: cardMotionPrompt, duration: 10 }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo animar la tarjeta.");
+      const file = await fetch(d.url); if (!file.ok) throw new Error("No se pudo descargar el clip.");
+      const video = URL.createObjectURL(await file.blob());
+      setCard(c => ({ ...c, video, status: undefined })); setOutput(null);
+    } catch (e: any) { setCard(c => ({ ...c, status: "error", note: e?.message || "Error" })); }
+  }
+
   async function makeVoice() {
     if (!script) return;
     setBusy("voice"); setError("");
@@ -137,7 +152,7 @@ export default function DevotionalStudio() {
       const heroImage = look === "card" ? card.image : hero.image;
       if (!heroImage) throw new Error(look === "card" ? "Falta la tarjeta. Créala antes de generar el video." : "Falta la imagen protagonista.");
       const scenes = plan.map(p => p.visual === "hero"
-        ? { image: heroImage, video: look === "card" ? undefined : hero.video, caption: "", duration: p.duration }
+        ? look === "card" ? { image: heroImage, video: card.video, overlay: card.video ? card.overlay : undefined, loop: true, caption: "", duration: p.duration } : { image: heroImage, video: hero.video, caption: "", duration: p.duration }
         : { image: ready[p.visual].image as string, caption: "", duration: p.duration });
       const { blob, type } = await renderReel(scenes, { title: look === "card" ? "" : script.title, voice: voice.blob, subtitles: voice.words, subtitleStyle, transition: "dissolve", fade: 1.4, onPauseChange: setPaused }, setProgress);
       setOutput({ url: URL.createObjectURL(blob), type });
@@ -188,13 +203,15 @@ export default function DevotionalStudio() {
           </> : <div className="devotionalImages">
             <figure className={card.status === "error" ? "flagged" : ""}>
               {card.image ? <img src={card.image} alt="Tarjeta de oración" /> : <div className="storyThumb">{card.status === "working" ? <Loader2 className="spin" size={18} /> : <ScrollText size={18} />}</div>}
-              <figcaption>Tarjeta{card.status === "error" && <span className="studioChip error" title={card.note}><AlertTriangle size={12} /> {card.note}</span>}</figcaption>
-              {card.image && <button type="button" className="uiIconBtn" title="Otro fondo" aria-label="Crear otro fondo" onClick={() => { setCard({}); setOutput(null); }}><Trash2 size={14} /></button>}
+              <figcaption>Tarjeta{card.video && <span className="studioChip ok"><Check size={12} /> Con movimiento</span>}{card.status === "working" && card.background && <span className="studioChip"><Loader2 className="spin" size={12} /> Animando…</span>}{card.status === "error" && <span className="studioChip error" title={card.note}><AlertTriangle size={12} /> {card.note}</span>}</figcaption>
+              {card.image && card.status !== "working" && <button type="button" className="uiIconBtn" title="Otro fondo" aria-label="Crear otro fondo" onClick={() => { setCard({}); setOutput(null); }}><Trash2 size={14} /></button>}
             </figure>
             <label className="field"><span>Título de la tarjeta</span><input value={script.cardTitle} maxLength={60} onChange={e => setScript({ ...script, cardTitle: e.target.value })} /></label>
           </div>}
           <div className="reelToolbar">
             <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void makeImages()} disabled={!!busy || working || (look === "card" ? Boolean(card.background) : Boolean(hero.image) && supports.every(s => s.image))}><Sparkles size={16} /> {look === "card" ? "Crear tarjeta" : "Crear imágenes"}</button>
+            {look === "card" && <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void animateCard()} disabled={!!busy || working || !card.background || Boolean(card.video)}><Video size={16} /> Dar movimiento <small>opcional</small></button>}
+            {look === "card" && card.video && <button type="button" className="linkButton" onClick={() => { setCard(c => ({ background: c.background, image: c.image, overlay: c.overlay })); setOutput(null); }}>Quitar movimiento</button>}
             {look === "image" && <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void animateHero()} disabled={!!busy || working || !hero.image || Boolean(hero.video)}><Video size={16} /> Dar movimiento <small>opcional</small></button>}
             {look === "image" && hero.video && <button type="button" className="linkButton" onClick={() => { setHero(h => ({ image: h.image })); setOutput(null); }}>Quitar movimiento</button>}
           </div>
