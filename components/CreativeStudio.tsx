@@ -16,7 +16,7 @@ import { loadSaintArts, saveSaintArt, removeSaintArt, loadBackgrounds, saveBackg
 import { useConfirm } from "@/components/ui/DialogProvider";
 
 type Page={id:string;name:string;followers_count?:number|null;fan_count?:number|null};
-type Props={pages:Page[];pageId:string;onChoosePage:(id:string)=>void;onSendToBulk:(items:CreativeQueueItem[])=>void;incoming?:{rows:SheetRow[];source:string;nonce:number}|null};
+type Props={pages:Page[];pageId:string;onChoosePage:(id:string)=>void;onSendToBulk:(items:CreativeQueueItem[])=>void;incoming?:{rows:SheetRow[];source:string;nonce:number;kind?:"minimal"|"photo"}|null};
 type Generated=CreativeQueueItem & {label:string;index:number;artMissing?:boolean;stale?:boolean};
 type StockPhoto={id:string;thumb:string;full:string;alt:string;color:string};
 type Review={status:"pass"|"review"|"block";issues:{message:string}[];correctedText?:string};
@@ -95,7 +95,7 @@ export default function CreativeStudio({pages,pageId,onChoosePage,onSendToBulk,i
  },[pageId,currentPage?.name]);
  // Frases enviadas desde el Learning Agent: llegan como filas con la plantilla de texto minimalista.
  const appliedIncoming=useRef(0);
- useEffect(()=>{if(!incoming?.rows.length||incoming.nonce===appliedIncoming.current||loadedPage!==pageId)return;appliedIncoming.current=incoming.nonce;setRows(incoming.rows.slice(0,maxBatch));setSheetName(incoming.source);setBatch("");setKind("minimal");setAspect("4:5");setGenerated([]);setError("");setNotice(`${Math.min(incoming.rows.length,maxBatch)} frases recibidas de ${incoming.source}. Revísalas y genera el lote.`);},[incoming?.nonce,loadedPage]);
+ useEffect(()=>{if(!incoming?.rows.length||incoming.nonce===appliedIncoming.current||loadedPage!==pageId)return;appliedIncoming.current=incoming.nonce;setRows(incoming.rows.slice(0,maxBatch));setSheetName(incoming.source);setBatch("");setKind(incoming.kind||"minimal");setAspect("4:5");setGenerated([]);setError("");setNotice(`${Math.min(incoming.rows.length,maxBatch)} piezas recibidas de ${incoming.source}. Revísalas y genera el lote.`);},[incoming?.nonce,loadedPage]);
  useEffect(()=>{setBackgrounds([]);if(!pageId)return;let cancelled=false;loadBackgrounds(pageId).then(list=>{if(!cancelled)setBackgrounds(list)}).catch(()=>{/* IndexedDB es opcional. */});return()=>{cancelled=true};},[pageId]);
  useEffect(()=>{if(!pageId)return;let cancelled=false;loadSaintArts(pageId).then(arts=>{if(!cancelled){setArtBySaint(arts);setArt(arts[saintKey(content.saint)]||"");}}).catch(()=>{/* IndexedDB is optional. The in-memory artwork will still work. */});return()=>{cancelled=true};},[pageId]);
  useEffect(()=>{if(loadedPage!==pageId||!pageId)return;try{localStorage.setItem(`efimero:creative:v1.9:${pageId}`,JSON.stringify({brand,kind}));}catch{setNotice("No se pudo guardar la identidad en este navegador. Comprueba el espacio disponible.");}},[brand,kind,pageId,loadedPage]);

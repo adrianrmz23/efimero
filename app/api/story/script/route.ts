@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/serverAuth";
 import { ciChat } from "@/lib/cheaperInference";
-import { ensureFictionDisclosure, parseScript, scriptPrompt } from "@/lib/storyScript";
+import { STORY_KINDS, ensureFictionDisclosure, parseScript, scriptPrompt, type StoryKind } from "@/lib/storyScript";
 import { findSaint } from "@/lib/saints";
 
 export const dynamic = "force-dynamic";
@@ -14,12 +14,13 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const topic = String(body.topic || "").trim().slice(0, 500);
   const scenes = Math.max(5, Math.min(12, Math.round(Number(body.scenes || 8))));
-  const kind = body.kind === "fiction" ? "fiction" : "real";
+  const kind: StoryKind = STORY_KINDS.some(k => k.id === body.kind) ? body.kind : "real";
   if (!topic) return NextResponse.json({ error: "Escribe el tema de la historia." }, { status: 400 });
   try {
     const system = kind === "fiction"
       ? "Eres guionista de relatos cortos de fe en español latino. Escribes ficción inspiradora claramente identificada como relato, sin presentarla como caso real. Respondes solo JSON válido."
-      : "Eres guionista de shorts virales de historias reales en español latino. Respondes solo JSON válido.";
+      : kind === "real" ? "Eres guionista de shorts virales de historias reales en español latino. Respondes solo JSON válido."
+      : "Eres guionista de contenido católico y cristiano para shorts en español latino: reverente, fiel a la Biblia y emotivo. Respondes solo JSON válido.";
     // Si el tema menciona un santo conocido, se fija su iconografía para que salga reconocible.
     const known = findSaint(topic);
     const isSaintStory = Boolean(known) || /\b(san|santa|santo|virgen|beato|beata)\s/i.test(topic);

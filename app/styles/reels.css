@@ -69,3 +69,26 @@
 .storyInfo{color:var(--ui-text-2)}
 .storySaintToggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ui-text-2);cursor:pointer}
 .storySaintToggle input{margin:0;accent-color:var(--ui-text)}
+/* Generador de lotes */
+.batchRows{display:flex;flex-direction:column;gap:8px;max-height:640px;margin:0;padding:0;overflow:auto;list-style:none;scrollbar-width:thin}
+.batchRows li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-bg)}
+/* Portadas de reels */
+.storyCover{display:flex;flex-direction:column;gap:12px;padding-top:12px;border-top:1px solid var(--ui-border)}
+.storyCover summary{font-size:14px;font-weight:600;cursor:pointer}
+.coverMaker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,200px);gap:16px;align-items:start}
+.coverControls{display:flex;flex-direction:column;gap:12px;min-width:0}
+.coverPreview{display:flex;flex-direction:column;gap:10px}
+.coverPreview img{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:var(--ui-r-md);border:1px solid var(--ui-border)}
+.coverPreview .reelEmpty{aspect-ratio:9/16;max-height:none}
+.coverSwatches{display:flex;gap:8px}
+.coverSwatches button{width:28px;height:28px;border-radius:999px;border:2px solid var(--ui-border);cursor:pointer}
+.coverSwatches button.active{border-color:var(--ui-text);box-shadow:0 0 0 2px var(--ui-bg) inset}
+.coverThumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;max-height:190px;overflow:auto}
+.coverThumbs button{padding:0;border:2px solid transparent;border-radius:6px;overflow:hidden;cursor:pointer;aspect-ratio:9/16;background:var(--ui-surface-2)}
+.coverThumbs button.active{border-color:var(--ui-text)}
+.coverThumbs img{display:block;width:100%;height:100%;object-fit:cover}
+@media(max-width:1300px){.coverMaker{grid-template-columns:1fr}.coverPreview{max-width:260px}}
+.coverToggles{display:flex;align-items:center;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--ui-text-2)}
+.coverToggles label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.coverToggles input{margin:0;accent-color:var(--ui-text)}
+.coverToggles select{width:auto}

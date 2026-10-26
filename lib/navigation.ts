@@ -8,7 +8,7 @@ export type NavGroup = { label?:string; sections:NavSection[] };
 export const navGroups:NavGroup[] = [
   { sections:[{ id:"home", label:"Inicio", icon:House, tabs:[{tab:"home",label:"Inicio"}] }] },
   { label:"Crear", sections:[
-    { id:"studio", label:"Estudio", icon:Sparkles, tabs:[{tab:"creator",label:"Post rápido"},{tab:"factory",label:"Fábrica de textos"},{tab:"experiments",label:"Experimentos"},{tab:"creativeStudio",label:"Estudio creativo"}] },
+    { id:"studio", label:"Estudio", icon:Sparkles, tabs:[{tab:"creator",label:"Post rápido"},{tab:"factory",label:"Fábrica de textos"},{tab:"experiments",label:"Experimentos"},{tab:"creativeStudio",label:"Estudio creativo"},{tab:"batch",label:"Generador de lotes"}] },
     { id:"inspiration", label:"Inspiración", icon:Radar, tabs:[{tab:"radar",label:"Radar"},{tab:"niches",label:"Laboratorio de nichos"},{tab:"learningAgent",label:"Learning Agent"}] },
     { id:"reels", label:"Reels", icon:Film, tabs:[{tab:"reelStudio",label:"Estudio de reels"},{tab:"reels",label:"Gestor de Reels"}] },
   ]},

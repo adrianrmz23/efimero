@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FICTION_BADGE, FICTION_DISCLOSURE, ensureFictionDisclosure, healingClaims, narrationOf, parseScript, sceneDurationsFromWords, scriptPrompt, subtitleGroups, type TimedWord } from "@/lib/storyScript";
+import { FICTION_BADGE, FICTION_DISCLOSURE, castInScene, ensureFictionDisclosure, healingClaims, narrationOf, parseScript, sceneDurationsFromWords, scriptPrompt, subtitleGroups, type TimedWord } from "@/lib/storyScript";
 import { findSaint } from "@/lib/saints";
 
 const words = (texts: string[], step = .5): TimedWord[] => texts.map((text, i) => ({ text, start: i * step, end: i * step + step * .9 }));
@@ -94,5 +94,16 @@ describe("santos y ganchos", () => {
     const script = parseScript('{"saint":"Saint Jude","scenes":[{"text":"Uno.","showsSaint":true},{"text":"Dos."}]}');
     expect(script.saint).toBe("Saint Jude");
     expect(script.scenes.map(s => s.showsSaint)).toEqual([true, false]);
+  });
+});
+
+describe("castInScene", () => {
+  const script = { title: "", character: "girl", caption: "", cast: [{ name: "Tomás", look: "a small brown-and-white puppy dog" }, { name: "Luna", look: "a 9-year-old girl in a yellow raincoat" }], scenes: [] };
+  it("describes every character named in the scene, ignoring accents and case", () => {
+    expect(castInScene(script, { text: "Allí, tomas estaba mojado.", image: "the shed at dawn", motion: "" }).map(c => c.name)).toEqual(["Tomás"]);
+    expect(castInScene(script, { text: "Luna lo abrazó.", image: "Luna hugs Tomás", motion: "" }).map(c => c.name)).toEqual(["Tomás", "Luna"]);
+  });
+  it("does not match names inside other words", () => {
+    expect(castInScene(script, { text: "Lunares en el cielo.", image: "", motion: "" })).toEqual([]);
   });
 });

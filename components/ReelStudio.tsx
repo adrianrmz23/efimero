@@ -46,7 +46,7 @@ export default function ReelStudio(){
   const confirm=useConfirm();
   // Recorrido
   const [scenes,setScenes]=useState<Scene[]>([]);const [title,setTitle]=useState("Casa de 6 m de frente ✅");const [music,setMusic]=useState<File|null>(null);const [transition,setTransition]=useState<ReelTransition>("dissolve");
-  const [rendering,setRendering]=useState(false);const [progress,setProgress]=useState(0);const [output,setOutput]=useState<{url:string;type:string}|null>(null);
+  const [rendering,setRendering]=useState(false);const [paused,setPaused]=useState(false);const [progress,setProgress]=useState(0);const [output,setOutput]=useState<{url:string;type:string}|null>(null);
   const imagesRef=useRef<HTMLInputElement>(null);const musicRef=useRef<HTMLInputElement>(null);
   const [houseStyle,setHouseStyle]=useState(DEFAULT_HOUSE_STYLE);const [rooms,setRooms]=useState<string[]>(ROOM_PRESETS.map(r=>r.id));const [generating,setGenerating]=useState("");
   const [narration,setNarration]=useState("");const [voice,setVoice]=useState("Kore");const [voiceBlob,setVoiceBlob]=useState<Blob|null>(null);const [voiceUrl,setVoiceUrl]=useState("");const [voiceBusy,setVoiceBusy]=useState(false);
@@ -113,7 +113,7 @@ export default function ReelStudio(){
   function moveScene(i:number,dir:-1|1){setScenes(cur=>{const next=[...cur];const j=i+dir;if(j<0||j>=next.length)return cur;[next[i],next[j]]=[next[j],next[i]];return next});setOutput(null)}
   async function render(){
     setRendering(true);setProgress(0);setError("");setOutput(null);
-    try{const {blob,type}=await renderReel(scenes,{title,music,voice:voiceBlob,transition},setProgress);setOutput({url:URL.createObjectURL(blob),type})}
+    try{const {blob,type}=await renderReel(scenes,{title,music,voice:voiceBlob,transition,onPauseChange:setPaused},setProgress);setOutput({url:URL.createObjectURL(blob),type})}
     catch(e:any){setError(e?.message||"No se pudo generar el reel.")}finally{setRendering(false)}
   }
 
@@ -173,7 +173,7 @@ export default function ReelStudio(){
         </div>
         <label className="field"><span>Transición</span><select value={transition} onChange={e =>{ setTransition(e.target.value as ReelTransition); setOutput(null); }}><option value="dissolve">Disolución suave (recomendada)</option><option value="black">Fundido a negro (dramática)</option><option value="cut">Corte directo</option></select></label>
         <p className="settingsHint">Usa música libre de derechos (por ejemplo, la biblioteca de audio de YouTube o Pixabay Music). Mientras se genera, deja esta pestaña abierta y visible.</p>
-        <div className="actionBar reelActions"><button type="button" className="uiBtn uiBtnPrimary" onClick={()=>void render()} disabled={!scenes.length||rendering}>{rendering?<Loader2 className="spin" size={16}/>:<Clapperboard size={16}/>} {rendering?`Generando… ${Math.round(progress*100)}%`:"Generar reel"}</button></div>
+        <div className="actionBar reelActions"><button type="button" className="uiBtn uiBtnPrimary" onClick={()=>void render()} disabled={!scenes.length||rendering}>{rendering?<Loader2 className="spin" size={16}/>:<Clapperboard size={16}/>} {rendering?paused?"En pausa: regresa a esta pestaña":`Generando… ${Math.round(progress*100)}%`:"Generar reel"}</button></div>
       </section>
       <section className="calPanel reelPreview">
         <div className="adsHead"><div><h2>Resultado</h2><p>Video vertical 1080×1920 listo para subir como reel.</p></div></div>

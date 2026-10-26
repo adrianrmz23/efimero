@@ -11,7 +11,7 @@ export type ReelScene = { image: string; caption: string; duration: number; vide
 // `transition`: cómo pasa una escena a la siguiente. "dissolve" mezcla suave con un ligero acercamiento,
 // "black" funde a negro (para momentos dramáticos) y "cut" es corte directo.
 export type ReelTransition = "dissolve" | "black" | "cut";
-export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; badge?: string; transition?: ReelTransition; fade?: number; fps?: number };
+export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; badge?: string; transition?: ReelTransition; fade?: number; fps?: number; onPauseChange?: (paused: boolean) => void };
 const ease = (x: number) => x * x * (3 - 2 * x);
 const VOICE_OFFSET = .4;
 
@@ -192,10 +192,30 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
   sources.forEach(s => { if (s.kind === "video") s.el.currentTime = 0; });
   draw(0);
   recorder.start(250);
+  // Si la pestaña se oculta, el navegador deja de dibujar y el video se congelaría mientras la voz sigue.
+  // Por eso se pausa todo (grabación, audio, clips y reloj) y se reanuda al volver a la pestaña.
+  let pausedMs = 0, pausedAt = 0, wake: (() => void) | null = null;
+  const onVisibility = () => {
+    if (document.hidden && !pausedAt) {
+      pausedAt = performance.now();
+      if (recorder.state === "recording") recorder.pause();
+      void audio?.suspend();
+      sources.forEach(s => { if (s.kind === "video") s.el.pause(); });
+      options.onPauseChange?.(true);
+    } else if (!document.hidden && pausedAt) {
+      pausedMs += performance.now() - pausedAt; pausedAt = 0;
+      void audio?.resume();
+      if (recorder.state === "paused") recorder.resume();
+      options.onPauseChange?.(false);
+      wake?.();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibility);
   const startedAt = performance.now();
   await new Promise<void>(resolve => {
     const tick = () => {
-      const t = (performance.now() - startedAt) / 1000;
+      if (pausedAt) { wake = () => { wake = null; requestAnimationFrame(tick); }; return; }
+      const t = (performance.now() - startedAt - pausedMs) / 1000;
       draw(Math.min(t, total));
       onProgress?.(Math.min(1, t / total));
       if (t >= total) { resolve(); return; }
@@ -203,6 +223,7 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
     };
     requestAnimationFrame(tick);
   });
+  document.removeEventListener("visibilitychange", onVisibility);
   recorder.stop();
   await finished;
   sources.forEach(s => { if (s.kind === "video") s.el.pause(); });

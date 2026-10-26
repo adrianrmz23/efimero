@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, Clapperboard, Copy, Download, FileText, ImagePlus, Loader2, Mic, Sparkles, Trash2, UserRound, Video } from "lucide-react";
 import { renderReel, type ReelTransition } from "@/lib/reelRender";
-import { FICTION_BADGE, STORY_STYLES, healingClaims, narrationOf, sceneDurationsFromWords, styleSuffix, type StoryKind, type StoryScript, type TimedWord } from "@/lib/storyScript";
+import { FICTION_BADGE, QUOTES_SCRIPTURE, STORY_KINDS, STORY_STYLES, castInScene, healingClaims, narrationOf, sceneDurationsFromWords, styleSuffix, type StoryKind, type StoryScript, type TimedWord } from "@/lib/storyScript";
 import { useConfirm } from "@/components/ui/DialogProvider";
+import CoverMaker from "@/components/CoverMaker";
 
 type SceneMedia = { image?: string; video?: string; status?: "working" | "error"; note?: string };
 const VOICES: Array<[string, string]> = [["Charon", "Charon · hombre, documental"], ["Orus", "Orus · hombre, firme"], ["Puck", "Puck · hombre, animado"], ["Kore", "Kore · mujer, clara"], ["Aoede", "Aoede · mujer, cálida"], ["Leda", "Leda · mujer, joven"]];
 
+// Etiqueta de la portada según el tipo de historia (los relatos de ficción siempre lo dicen).
+const COVER_BADGE: Record<StoryKind, string> = { real: "Historia real", fiction: "Relato inspirador", bible: "Historia bíblica", psalm: "Salmo", prayer: "Oración" };
 async function pool<T>(items: T[], limit: number, task: (item: T) => Promise<void>) { const queue = [...items]; await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => { while (queue.length) await task(queue.shift() as T); })); }
 async function shrink(dataUrl: string, w: number, h: number, maxLength: number) {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => reject(new Error("No se pudo leer la imagen.")); i.src = dataUrl; });
@@ -34,6 +37,7 @@ export default function StoryStudio() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [output, setOutput] = useState<{ url: string; type: string } | null>(null);
 
   useEffect(() => () => { if (output) URL.revokeObjectURL(output.url); }, [output]);
@@ -72,9 +76,12 @@ export default function StoryStudio() {
     setMedia(cur => cur.map((m, k) => k === i ? { ...m, status: "working", note: "" } : m));
     try {
       const who = script.character ? ` The main character always looks the same: ${script.character}.` : "";
+      // Cada personaje que aparece en la escena se describe (un perro llamado Tomás debe seguir siendo un perro).
+      const present = castInScene(script, scene);
+      const cast = present.length ? ` Characters in this scene: ${present.map(c => `${c.name} is ${c.look}`).join("; ")}.` : "";
       // En las escenas marcadas, el santo se dibuja con su iconografía tradicional.
       const saint = scene.showsSaint && script.saint ? ` The saint appears in this scene, recognizable by the traditional iconography: ${script.saint}. Respectful, luminous, devotional depiction.` : "";
-      const prompt = `${reference ? "Use the character from the reference image exactly (same face, hair and clothes). " : ""}${scene.image}${who}${saint} ${styleSuffix(style)}`;
+      const prompt = `${reference ? "Use the character from the reference image exactly (same face, hair and clothes). " : ""}${scene.image}${cast}${who}${saint} ${styleSuffix(style)}`;
       const r = await fetch("/api/media/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, reference: reference || undefined }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo crear la ilustración.");
       setMedia(cur => cur.map((m, k) => k === i ? { image: d.image } : m));
@@ -130,14 +137,14 @@ export default function StoryStudio() {
       const durations = sceneDurationsFromWords(script.scenes.map(s => s.text), voice.words, voice.duration);
       const scenes = script.scenes.map((s, i) => ({ image: media[i]?.image || "", video: media[i]?.video, caption: "", duration: durations[i] }));
       if (scenes.some(s => !s.image)) throw new Error("Faltan ilustraciones. Créalas antes de generar el video.");
-      const { blob, type } = await renderReel(scenes, { title: script.title, voice: voice.blob, subtitles: voice.words, badge: scriptKind === "fiction" ? FICTION_BADGE : undefined, transition }, setProgress);
+      const { blob, type } = await renderReel(scenes, { title: script.title, voice: voice.blob, subtitles: voice.words, badge: scriptKind === "fiction" ? FICTION_BADGE : undefined, transition, onPauseChange: setPaused }, setProgress);
       setOutput({ url: URL.createObjectURL(blob), type });
     } catch (e: any) { setError(e?.message || "No se pudo generar el video."); } finally { setBusy(""); }
   }
 
   // El tipo con el que se escribió el guion (no el seleccionado ahora) decide el aviso del video.
-  const scriptKind: StoryKind = (script as (StoryScript & { kind?: StoryKind }) | null)?.kind === "fiction" ? "fiction" : "real";
-  const flagged = script && scriptKind === "fiction" ? healingClaims(script) : [];
+  const scriptKind: StoryKind = (script as (StoryScript & { kind?: StoryKind }) | null)?.kind || "real";
+  const flagged = script && (scriptKind === "fiction" || scriptKind === "prayer") ? healingClaims(script) : [];
   const ready = Boolean(script && voice && media.length && media.every(m => m.image));
   const words = script ? narrationOf(script.scenes).split(/\s+/).filter(Boolean).length : 0;
   const extension = output?.type.includes("mp4") ? "mp4" : "webm";
@@ -148,9 +155,9 @@ export default function StoryStudio() {
       {error && <div className="quickNotice error"><AlertTriangle size={16} /><span>{error}</span></div>}
 
       <div className="storyStep"><span className="storyNum">1</span><div>
-        <div className="field"><span>Tipo de historia</span><div className="segmented" role="group" aria-label="Tipo de historia"><button type="button" className={kind === "real" ? "active" : ""} onClick={() => setKind("real")}>Historia real</button><button type="button" className={kind === "fiction" ? "active" : ""} onClick={() => setKind("fiction")}>Relato inspirador (ficción)</button></div></div>
+        <div className="field"><span>Tipo</span><div className="adsCountries" role="group" aria-label="Tipo de historia">{STORY_KINDS.map(k => <button type="button" key={k.id} className={kind === k.id ? "active" : ""} aria-pressed={kind === k.id} onClick={() => setKind(k.id)}>{k.label}</button>)}</div></div>
         {kind === "fiction" && <p className="storyWarn storyInfo">Personajes inventados. El video muestra «{FICTION_BADGE}» todo el tiempo, la narración lo dice al inicio y el caption lo aclara. No promete curaciones.</p>}
-        <label className="field"><span>Tema de la historia</span><textarea rows={2} value={topic} onChange={e => setTopic(e.target.value)} placeholder={kind === "fiction" ? "Ej. Una mamá que le pide a San Judas Tadeo por el trabajo de su esposo y la familia sale adelante" : "Ej. Roy Sullivan, el guardabosques al que le cayeron siete rayos y sobrevivió"} /></label>
+        <label className="field"><span>Tema de la historia</span><textarea rows={2} value={topic} onChange={e => setTopic(e.target.value)} placeholder={STORY_KINDS.find(k => k.id === kind)?.placeholder} /></label>
         <div className="fieldRow">
           <label className="field"><span>Estilo</span><select value={style} onChange={e => { setStyle(e.target.value); setOutput(null); }}>{Object.entries(STORY_STYLES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
           <label className="field"><span>Escenas</span><select value={sceneCount} onChange={e => setSceneCount(Number(e.target.value))}>{[6, 8, 10, 12].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
@@ -160,7 +167,7 @@ export default function StoryStudio() {
 
       {script && <>
         <div className="storyStep"><span className="storyNum">2</span><div>
-          {scriptKind === "fiction" ? <p className="storyWarn storyInfo">{FICTION_BADGE}: personajes y hechos inventados con fines inspiradores.</p> : <p className="storyWarn"><AlertTriangle size={14} /> Revisa los datos antes de publicar: la IA puede equivocarse en detalles.</p>}
+          {scriptKind === "fiction" ? <p className="storyWarn storyInfo">{FICTION_BADGE}: personajes y hechos inventados con fines inspiradores.</p> : QUOTES_SCRIPTURE.includes(scriptKind) ? <p className="storyWarn"><AlertTriangle size={14} /> Compara el texto bíblico con tu Biblia antes de publicar: la IA puede cambiar palabras.</p> : scriptKind === "prayer" ? null : <p className="storyWarn"><AlertTriangle size={14} /> Revisa los datos antes de publicar: la IA puede equivocarse en detalles.</p>}
           {flagged.length > 0 && <p className="storyWarn"><AlertTriangle size={14} /> Revisa {flagged.length === 1 ? "la escena" : "las escenas"} {flagged.map(i => i + 1).join(", ")}: suena a promesa de curación. Cámbiala por fuerza, paz o atención médica.</p>}
           <label className="field"><span>Título en pantalla</span><input value={script.title} maxLength={80} onChange={e => { setScript({ ...script, title: e.target.value }); setOutput(null); }} /></label>
           <ol className="storyScenes">{script.scenes.map((s, i) => <li key={i} className={media[i]?.status === "error" || flagged.includes(i) ? "flagged" : ""}>
@@ -197,13 +204,16 @@ export default function StoryStudio() {
         </div></div>
 
         <div className="storyStep"><span className="storyNum">5</span><div><label className="field"><span>Transición</span><select value={transition} onChange={e => { setTransition(e.target.value as ReelTransition); setOutput(null); }}><option value="dissolve">Disolución suave (recomendada)</option><option value="black">Fundido a negro (dramática)</option><option value="cut">Corte directo</option></select></label></div></div>
-        <div className="actionBar reelActions"><button type="button" className="uiBtn uiBtnPrimary" onClick={() => void render()} disabled={!ready || !!busy}>{busy === "render" ? <Loader2 className="spin" size={16} /> : <Clapperboard size={16} />} {busy === "render" ? `Generando… ${Math.round(progress * 100)}%` : "Generar video"}</button>{!ready && <span className="studioHint">Necesitas las ilustraciones y la voz.</span>}</div>
+        <div className="actionBar reelActions"><button type="button" className="uiBtn uiBtnPrimary" onClick={() => void render()} disabled={!ready || !!busy}>{busy === "render" ? <Loader2 className="spin" size={16} /> : <Clapperboard size={16} />} {busy === "render" ? paused ? "En pausa: regresa a esta pestaña" : `Generando… ${Math.round(progress * 100)}%` : "Generar video"}</button>{!ready && <span className="studioHint">Necesitas las ilustraciones y la voz.</span>}</div>
       </>}
     </section>
 
     <section className="calPanel reelPreview">
       <div className="adsHead"><div><h2>Video</h2><p>Vertical 1080×1920 con título, voz y subtítulos.</p></div></div>
       {output ? <><video src={output.url} controls playsInline /><a className="uiBtn uiBtnPrimary" href={output.url} download={`historia.${extension}`}><Download size={16} /> Descargar video</a></> : <div className="reelEmpty"><Clapperboard size={22} /><span>{busy === "render" ? "Grabando en tiempo real; deja esta pestaña visible…" : "Aquí aparecerá tu historia."}</span></div>}
+      {script && media.some(m => m.image) && <details className="storyCover" open><summary>Portada del reel</summary>
+        <CoverMaker images={media.map(m => m.image || "").filter(Boolean)} text={script.cover || script.title} highlight={script.coverWord} badge={COVER_BADGE[scriptKind]} aiPrompt={`${script.scenes[0]?.image || script.title}${script.character ? ` Main character: ${script.character}.` : ""}${script.saint ? ` ${script.saint}.` : ""} ${styleSuffix(style)}`} />
+      </details>}
       {script?.caption && <div className="storyCaption"><span>Texto para la publicación</span><p>{script.caption}</p><button type="button" className="linkButton" onClick={() => void navigator.clipboard?.writeText(script.caption)}><Copy size={13} /> Copiar</button></div>}
       <p className="settingsHint">Agrega música de suspenso al subirlo y marca el video como hecho con IA.</p>
     </section>
