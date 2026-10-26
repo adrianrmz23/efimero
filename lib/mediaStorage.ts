@@ -2,10 +2,10 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 // Guarda archivos generados (clips de video) en Supabase Storage y devuelve un enlace temporal.
 // Se usa porque Vercel no permite respuestas de más de 4.5 MB.
-const BUCKET = "efimero-media";
+export const BUCKET = "efimero-media";
 let bucketReady = false;
 
-async function ensureBucket() {
+export async function ensureBucket() {
   if (bucketReady) return;
   const db = getSupabaseAdmin();
   const { data } = await db.storage.getBucket(BUCKET);

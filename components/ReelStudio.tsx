@@ -58,6 +58,8 @@ export default function ReelStudio(){
   const [error,setError]=useState("");
   const preset=TRANSFORM_PRESETS.find(p=>p.id===presetId);
 
+  // Al volver de conectar YouTube se abre directo la Oración devocional.
+  useEffect(()=>{if(new URLSearchParams(window.location.search).has("youtube"))setMode("devotional")},[]);
   useEffect(()=>()=>{if(output)URL.revokeObjectURL(output.url)},[output]);
   useEffect(()=>()=>{if(voiceUrl)URL.revokeObjectURL(voiceUrl)},[voiceUrl]);
 

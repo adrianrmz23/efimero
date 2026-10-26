@@ -4,6 +4,7 @@
 //   Se configura con CLAUDE_API_BASE_URL, CLAUDE_API_KEY y CLAUDE_API_MODEL; CLAUDE_API_FORMAT elige el formato
 //   ("anthropic" = /v1/messages, "openai" = /v1/chat/completions).
 import { ciTextModel } from "@/lib/cheaperInference";
+import { looksCorrupted } from "@/lib/textQuality";
 
 export type TextProvider = "cheaperinference" | "claudeapi";
 
@@ -39,11 +40,11 @@ export async function generateText(provider: TextProvider, system: string, user:
     const c = claudeConfig();
     if (!c.key || !c.base) throw Object.assign(new Error("Falta configurar CLAUDE_API_BASE_URL y CLAUDE_API_KEY para usar Claude API."), { status: 501 });
     if (c.format === "openai") {
-      const r = await fetch(`${c.base}/v1/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${c.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: c.model, max_tokens: maxTokens, temperature: .8, messages: [{ role: "system", content: system }, { role: "user", content: user }] }), cache: "no-store", signal: AbortSignal.timeout(170_000) });
+      const r = await fetch(`${c.base}/v1/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${c.key}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: c.model, max_tokens: maxTokens, messages: [{ role: "system", content: system }, { role: "user", content: user }] }), cache: "no-store", signal: AbortSignal.timeout(170_000) });
       if (!r.ok) throw await readError(r, "Claude API");
       const d = await r.json(); return String(d?.choices?.[0]?.message?.content || "");
     }
-    const r = await fetch(`${c.base}/v1/messages`, { method: "POST", headers: { "x-api-key": c.key, Authorization: `Bearer ${c.key}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: c.model, max_tokens: maxTokens, temperature: .8, system, messages: [{ role: "user", content: user }] }), cache: "no-store", signal: AbortSignal.timeout(170_000) });
+    const r = await fetch(`${c.base}/v1/messages`, { method: "POST", headers: { "x-api-key": c.key, Authorization: `Bearer ${c.key}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: c.model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }), cache: "no-store", signal: AbortSignal.timeout(170_000) });
     if (!r.ok) throw await readError(r, "Claude API");
     const d = await r.json();
     return (Array.isArray(d?.content) ? d.content : []).filter((b: any) => b?.type === "text").map((b: any) => String(b.text || "")).join("");
@@ -53,4 +54,25 @@ export async function generateText(provider: TextProvider, system: string, user:
   const r = await fetch(`${ciBase()}/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: ciBatchModel(), max_tokens: maxTokens, temperature: .8, reasoning_effort: "low", messages: [{ role: "system", content: system }, { role: "user", content: user }] }), cache: "no-store", signal: AbortSignal.timeout(170_000) });
   if (!r.ok) throw await readError(r, "Cheaper Inference");
   const d = await r.json(); return String(d?.choices?.[0]?.message?.content || "");
+}
+
+// Pide JSON y lo valida. Si el proveedor elegido responde con texto dañado o fuera de formato, reintenta una vez
+// y luego usa el otro proveedor configurado. Devuelve cuál respondió para mostrarlo.
+export async function generateChecked<T>(preferred: TextProvider, system: string, user: string, parse: (raw: string) => T, maxTokens = 4000) {
+  const ready = availableProviders().filter(p => p.ready);
+  const first = ready.find(p => p.id === preferred) || ready[0];
+  if (!first) throw Object.assign(new Error("No hay proveedor de texto configurado."), { status: 501 });
+  const other = ready.find(p => p.id !== first.id);
+  const attempts = [first, first, ...(other ? [other] : [])];
+  const startedAt = Date.now(); let lastError: unknown = null;
+  for (const [i, provider] of attempts.entries()) {
+    // El reintento con el mismo proveedor solo si queda tiempo (las funciones de Vercel tienen límite).
+    if (i === 1 && Date.now() - startedAt > 70_000) continue;
+    try {
+      const raw = await generateText(provider.id, system, user, maxTokens);
+      if (looksCorrupted(raw)) throw new Error(`${provider.label} devolvió texto dañado.`);
+      return { value: parse(raw), provider: provider.id, model: provider.model, fallback: provider.id !== first.id ? `${first.label} falló (${String((lastError as Error)?.message || "error").slice(0, 120)}); se usó ${provider.label}.` : "" };
+    } catch (error) { lastError = error; }
+  }
+  throw lastError;
 }

@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, Clapperboard, Copy, Download, FileText, ImagePlus, Loader2, Mic, Music, ScrollText, Sparkles, Trash2, Video, Youtube } from "lucide-react";
+import { AlertTriangle, Check, Lightbulb, TrendingUp, Clapperboard, Copy, Download, FileText, ImagePlus, Loader2, Mic, Music, ScrollText, Sparkles, Trash2, Video, Youtube } from "lucide-react";
 import { renderReel, type SubtitleStyle } from "@/lib/reelRender";
 import { sceneDurationsFromWords, type TimedWord } from "@/lib/storyScript";
 import { DEVOTIONAL_STYLES, IMAGE_VARIETY, devotionalSuffix, mergeVisuals, visualPlan, type DevotionalKind, type DevotionalScript } from "@/lib/devotional";
-import { cardBackgroundPrompt, cardMotionPrompt, renderPrayerCardLayers } from "@/lib/prayerCard";
+import { CARD_THEMES, cardBackgroundPrompt, cardMotionPrompt, pickCardTheme, renderPrayerCardLayers } from "@/lib/prayerCard";
 import { renderAmbient, type AmbientMood } from "@/lib/ambientMusic";
 import type { YoutubeMeta } from "@/lib/youtubeMeta";
+import type { PrayerIdea, ShortTrend } from "@/lib/prayerIdeas";
+import { uploadToYoutube, type YoutubePrivacy } from "@/lib/youtubeUpload";
 import { useConfirm } from "@/components/ui/DialogProvider";
 import CoverMaker from "@/components/CoverMaker";
 
@@ -48,7 +50,10 @@ export default function DevotionalStudio() {
   const [script, setScript] = useState<(DevotionalScript & { kind: DevotionalKind }) | null>(null);
   const [hero, setHero] = useState<Media>({});
   const [supports, setSupports] = useState<Media[]>([]);
-  const [card, setCard] = useState<{ background?: string; image?: string; overlay?: string; video?: string; status?: "working" | "error"; note?: string }>({});
+  const [card, setCard] = useState<{ background?: string; image?: string; overlay?: string; video?: string; theme?: string; status?: "working" | "error"; note?: string }>({});
+  // "auto" elige el fondo según el tema de la oración y cambia de adorno en cada tarjeta nueva.
+  const [cardTheme, setCardTheme] = useState("auto");
+  const [lastTheme, setLastTheme] = useState("");
   const [voice, setVoice] = useState<{ blob: Blob; url: string; duration: number; words: TimedWord[] } | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -60,7 +65,23 @@ export default function DevotionalStudio() {
   const [musicFile, setMusicFile] = useState<File | null>(null);
   const [musicVolume, setMusicVolume] = useState(.18);
   const musicRef = useRef<HTMLInputElement>(null);
-  const [youtube, setYoutube] = useState<(YoutubeMeta & { model?: string }) | null>(null);
+  const [youtube, setYoutube] = useState<(YoutubeMeta & { model?: string; fallback?: string }) | null>(null);
+  const [channel, setChannel] = useState<{ configured: boolean; connected: boolean; channelTitle?: string } | null>(null);
+  const [privacy, setPrivacy] = useState<YoutubePrivacy>("private");
+  const [upload, setUpload] = useState<{ progress?: number; url?: string; error?: string } | null>(null);
+  const [notice, setNotice] = useState("");
+  const [ideas, setIdeas] = useState<{ ideas: PrayerIdea[]; trends: ShortTrend[]; trendsError?: string; model?: string; fallback?: string } | null>(null);
+  const [usedTopics, setUsedTopics] = useState<string[]>([]);
+
+  // Estado del canal de YouTube y aviso al volver de conectar la cuenta de Google.
+  useEffect(() => {
+    void fetch("/api/youtube/connection").then(r => r.ok ? r.json() : null).then(d => { if (d) setChannel(d); }).catch(() => {});
+    const params = new URLSearchParams(window.location.search); const status = params.get("youtube");
+    if (!status) return;
+    setNotice(status === "connected" ? "Canal de YouTube conectado." : status === "cancelled" ? "Se canceló la conexión con YouTube." : `No se pudo conectar YouTube: ${params.get("detail") || "intenta de nuevo"}`);
+    params.delete("youtube"); params.delete("detail");
+    window.history.replaceState(null, "", `${window.location.pathname}${params.toString() ? `?${params}` : ""}`);
+  }, []);
 
   useEffect(() => () => { if (output) URL.revokeObjectURL(output.url); }, [output]);
   useEffect(() => () => { if (voice) URL.revokeObjectURL(voice.url); }, [voice]);
@@ -76,14 +97,36 @@ export default function DevotionalStudio() {
   function chooseLook(next: Look) { setLook(next); setSubtitleStyle(next === "card" ? "none" : "highlight"); setOutput(null); }
   function patchLine(i: number, text: string) { setScript(cur => cur ? { ...cur, lines: cur.lines.map((l, k) => k === i ? text : l) } : cur); setVoice(null); setOutput(null); }
 
+  // Ideas de temas con la API de Claude, apoyadas en los shorts de oración más vistos del mes si YouTube está conectado.
+  async function suggestIdeas() {
+    setBusy("ideas"); setError("");
+    try {
+      const r = await fetch("/api/devotional/ideas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, recent: usedTopics }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudieron generar ideas.");
+      setIdeas(d);
+    } catch (e: any) { setError(e?.message || "No se pudieron generar ideas."); } finally { setBusy(""); }
+  }
+
   async function writeScript() {
     if (!topic.trim()) return;
+    setUsedTopics(cur => [topic.trim(), ...cur.filter(t => t !== topic.trim())].slice(0, 12));
     setBusy("script"); setError(""); setOutput(null);
     try {
       const r = await fetch("/api/story/devotional", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, kind, supports: IMAGE_VARIETY.find(v => v.id === variety)?.supports }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo escribir la oración.");
-      setScript(d); setYoutube(null); setHero({}); setSupports(d.support.map(() => ({}))); setCard(c => ({ background: c.background })); setVoice(null);
+      setScript(d); setYoutube(null); setHero({}); setSupports(d.support.map(() => ({}))); setCard({}); setVoice(null);
     } catch (e: any) { setError(e?.message || "No se pudo escribir la oración."); } finally { setBusy(""); }
+  }
+
+  // Crea el fondo de la tarjeta. Con «Otro fondo» se pide confirmación y se reemplaza el actual por uno con otro adorno.
+  async function makeCard(ask: boolean) {
+    if (!script) return;
+    if (ask && !await confirm({ title: "¿Crear otro fondo?", description: "Se crea un pergamino nuevo con otros adornos (aprox. 0.02 a 0.08 USD). Si la tarjeta tenía movimiento, habrá que volver a animarla.", confirmLabel: "Crear otro fondo" })) return;
+    setError(""); setOutput(null);
+    const theme = cardTheme === "auto" ? pickCardTheme(`${topic} ${script.title}`, card.theme || lastTheme) : cardTheme;
+    setCard(c => ({ ...c, video: undefined, status: "working", note: "" }));
+    try { setCard({ background: await generateImage(cardBackgroundPrompt(theme)), theme }); setLastTheme(theme); }
+    catch (e: any) { setCard(c => ({ ...c, status: "error", note: e?.message || "Error" })); }
   }
 
   async function makeImages() {
@@ -92,11 +135,7 @@ export default function DevotionalStudio() {
     if (!count) return;
     if (!await confirm({ title: `¿Crear ${count} ${count === 1 ? "imagen" : "imágenes"}?`, description: `Se usará Cheaper Inference (aprox. 0.02 a 0.08 USD por imagen).${look === "card" ? " Se crea el pergamino sin letras; la oración la escribe la app para que salga exacta." : ""}`, confirmLabel: "Crear imágenes" })) return;
     setError(""); setOutput(null);
-    if (look === "card") {
-      setCard(c => ({ ...c, status: "working", note: "" }));
-      try { setCard({ background: await generateImage(cardBackgroundPrompt) }); } catch (e: any) { setCard({ status: "error", note: e?.message || "Error" }); }
-      return;
-    }
+    if (look === "card") { await makeCard(false); return; }
     // Se crean 3 a la vez para no saturar la API.
     const jobs: Array<() => Promise<void>> = [];
     if (!hero.image) jobs.push(async () => {
@@ -133,7 +172,7 @@ export default function DevotionalStudio() {
     setCard(c => ({ ...c, status: "working", note: "" }));
     try {
       const image = await shrink(card.background, 720, 1280, 270_000);
-      const r = await fetch("/api/media/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image, prompt: cardMotionPrompt, duration: 10 }) });
+      const r = await fetch("/api/media/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image, prompt: cardMotionPrompt(card.theme || "dove"), duration: 10 }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo animar la tarjeta.");
       const file = await fetch(d.url); if (!file.ok) throw new Error("No se pudo descargar el clip.");
       const video = URL.createObjectURL(await file.blob());
@@ -149,6 +188,17 @@ export default function DevotionalStudio() {
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo escribir la publicación.");
       setYoutube(d);
     } catch (e: any) { setError(e?.message || "No se pudo escribir la publicación."); } finally { setBusy(""); }
+  }
+
+  async function sendToYoutube() {
+    if (!output || !youtube) return;
+    if (!await confirm({ title: "¿Subir el video a YouTube?", description: `Se sube a «${channel?.channelTitle || "tu canal"}» como ${privacy === "public" ? "público" : privacy === "unlisted" ? "no listado" : "privado"}, con el título y la descripción de abajo y marcado como contenido hecho con IA. Mientras Google no audite la app, YouTube lo deja privado: lo haces público desde YouTube Studio.`, confirmLabel: "Subir" })) return;
+    setUpload({ progress: 0 });
+    try {
+      const video = await (await fetch(output.url)).blob();
+      const result = await uploadToYoutube(video, youtube, privacy, progress => setUpload({ progress }));
+      setUpload({ url: result.url });
+    } catch (e: any) { setUpload({ error: e?.message || "No se pudo subir el video." }); }
   }
 
   async function makeVoice() {
@@ -197,10 +247,18 @@ export default function DevotionalStudio() {
     <section className="calPanel">
       <div className="adsHead"><div><h2>Oración devocional</h2><p>Imagen realista que se mueve suave, voz serena y subtítulos grandes.</p></div></div>
       {error && <div className="quickNotice error"><AlertTriangle size={16} /><span>{error}</span></div>}
+      {notice && <div className="quickNotice"><Youtube size={16} /><span>{notice}</span></div>}
 
       <div className="storyStep"><span className="storyNum">1</span><div>
         <div className="field"><span>Tipo</span><div className="adsCountries" role="group" aria-label="Tipo"><button type="button" className={kind === "prayer" ? "active" : ""} aria-pressed={kind === "prayer"} onClick={() => setKind("prayer")}>Oración</button><button type="button" className={kind === "psalm" ? "active" : ""} aria-pressed={kind === "psalm"} onClick={() => setKind("psalm")}>Salmo</button></div></div>
         <label className="field"><span>Imágenes distintas</span><select value={variety} onChange={e => setVariety(e.target.value)}>{IMAGE_VARIETY.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></label>
+        <div className="reelToolbar"><button type="button" className="uiBtn uiBtnSecondary" onClick={() => void suggestIdeas()} disabled={!!busy}>{busy === "ideas" ? <Loader2 className="spin" size={16} /> : <Lightbulb size={16} />} {ideas ? "Otras ideas" : "Ideas con IA"}</button>{ideas?.model && <span className="studioHint">con {ideas.model}{ideas.trends.length ? ` · ${ideas.trends.length} shorts en tendencia` : ""}</span>}</div>
+        {ideas?.fallback && <span className="studioHint"><AlertTriangle size={13} /> {ideas.fallback}</span>}
+        {ideas && <div className="devotionalIdeas">
+          {ideas.ideas.map((idea, i) => <button type="button" key={i} className={topic === idea.topic ? "active" : ""} onClick={() => { setTopic(idea.topic); setKind(idea.kind); }}><strong>{idea.topic}</strong><span>{idea.why}</span></button>)}
+          {ideas.trends.length > 0 ? <details><summary><TrendingUp size={13} /> Shorts de oración más vistos del último mes</summary><ol>{ideas.trends.map(t => <li key={t.url}><a href={t.url} target="_blank" rel="noreferrer">{t.title}</a> · {t.views.toLocaleString("es-MX")} vistas · {t.channel}</li>)}</ol></details>
+            : <span className="studioHint">{ideas.trendsError ? `Tendencias no disponibles: ${ideas.trendsError}` : "Sin datos de tendencias: conecta tu canal de YouTube para basar las ideas en lo más visto."}</span>}
+        </div>}
         <label className="field"><span>Tema</span><textarea rows={2} value={topic} onChange={e => setTopic(e.target.value)} placeholder={kind === "psalm" ? "Ej.: Salmo 91 para la protección de la familia" : "Ej.: Oración a la Virgen del Carmen por los hijos"} /></label>
         <button type="button" className={script ? "uiBtn uiBtnSecondary" : "uiBtn uiBtnPrimary"} onClick={() => void writeScript()} disabled={!topic.trim() || !!busy}>{busy === "script" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />} {script ? "Reescribir" : kind === "psalm" ? "Escribir salmo" : "Escribir oración"}</button>
       </div></div>
@@ -231,13 +289,15 @@ export default function DevotionalStudio() {
           </> : <div className="devotionalImages">
             <figure className={card.status === "error" ? "flagged" : ""}>
               {card.image ? <img src={card.image} alt="Tarjeta de oración" /> : <div className="storyThumb">{card.status === "working" ? <Loader2 className="spin" size={18} /> : <ScrollText size={18} />}</div>}
-              <figcaption>Tarjeta{card.video && <span className="studioChip ok"><Check size={12} /> Con movimiento</span>}{card.status === "working" && card.background && <span className="studioChip"><Loader2 className="spin" size={12} /> Animando…</span>}{card.status === "error" && <span className="studioChip error" title={card.note}><AlertTriangle size={12} /> {card.note}</span>}</figcaption>
-              {card.image && card.status !== "working" && <button type="button" className="uiIconBtn" title="Otro fondo" aria-label="Crear otro fondo" onClick={() => { setCard({}); setOutput(null); }}><Trash2 size={14} /></button>}
+              <figcaption>Tarjeta{card.theme && ` · ${CARD_THEMES[card.theme]?.label || ""}`}{card.video && <span className="studioChip ok"><Check size={12} /> Con movimiento</span>}{card.status === "working" && card.background && <span className="studioChip"><Loader2 className="spin" size={12} /> Animando…</span>}{card.status === "error" && <span className="studioChip error" title={card.note}><AlertTriangle size={12} /> {card.note}</span>}</figcaption>
+              {card.image && card.status !== "working" && <button type="button" className="uiIconBtn" title="Quitar fondo" aria-label="Quitar fondo" onClick={() => { setCard({}); setOutput(null); }}><Trash2 size={14} /></button>}
             </figure>
+            <label className="field"><span>Fondo</span><select value={cardTheme} onChange={e => setCardTheme(e.target.value)}><option value="auto">Automático (cambia en cada tarjeta)</option>{Object.entries(CARD_THEMES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
             <label className="field"><span>Título de la tarjeta</span><input value={script.cardTitle} maxLength={60} onChange={e => setScript({ ...script, cardTitle: e.target.value })} /></label>
           </div>}
           <div className="reelToolbar">
             <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void makeImages()} disabled={!!busy || working || (look === "card" ? Boolean(card.background) : Boolean(hero.image) && supports.every(s => s.image))}><Sparkles size={16} /> {look === "card" ? "Crear tarjeta" : "Crear imágenes"}</button>
+            {look === "card" && card.background && <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void makeCard(true)} disabled={!!busy || working}><ImagePlus size={16} /> Otro fondo</button>}
             {look === "card" && <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void animateCard()} disabled={!!busy || working || !card.background || Boolean(card.video)}><Video size={16} /> Dar movimiento <small>opcional</small></button>}
             {look === "card" && card.video && <button type="button" className="linkButton" onClick={() => { setCard(c => ({ background: c.background, image: c.image, overlay: c.overlay })); setOutput(null); }}>Quitar movimiento</button>}
             {look === "image" && <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void animateHero()} disabled={!!busy || working || !hero.image || Boolean(hero.video)}><Video size={16} /> Dar movimiento <small>opcional</small></button>}
@@ -282,6 +342,16 @@ export default function DevotionalStudio() {
             <button type="button" className="linkButton" onClick={() => void writeYoutube()} disabled={!!busy}>Reescribir</button>
           </div>
           {youtube.model && <span className="studioHint">Escrito con {youtube.model}</span>}
+          {youtube.fallback && <span className="studioHint"><AlertTriangle size={13} /> {youtube.fallback}</span>}
+          {channel && !channel.configured && <span className="studioHint">Para subirlo directo falta configurar Google (GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Vercel).</span>}
+          {channel?.configured && !channel.connected && <a className="uiBtn uiBtnSecondary" href="/api/auth/youtube/start"><Youtube size={16} /> Conectar canal de YouTube</a>}
+          {channel?.connected && <div className="reelToolbar">
+            <select aria-label="Visibilidad" value={privacy} onChange={e => setPrivacy(e.target.value as YoutubePrivacy)}><option value="private">Privado</option><option value="unlisted">No listado</option><option value="public">Público</option></select>
+            <button type="button" className="uiBtn uiBtnPrimary" onClick={() => void sendToYoutube()} disabled={!output || (upload?.progress !== undefined && !upload.url && !upload.error)}>{upload?.progress !== undefined ? <Loader2 className="spin" size={16} /> : <Youtube size={16} />} {upload?.progress !== undefined ? `Subiendo… ${Math.round(upload.progress * 100)}%` : `Subir a ${channel.channelTitle || "YouTube"}`}</button>
+            {!output && <span className="studioHint">Primero genera el video.</span>}
+          </div>}
+          {upload?.url && <span className="studioHint"><Check size={13} /> Subido: <a href={upload.url} target="_blank" rel="noreferrer">{upload.url}</a></span>}
+          {upload?.error && <span className="studioChip error"><AlertTriangle size={12} /> {upload.error}</span>}
         </> : <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void writeYoutube()} disabled={!!busy}>{busy === "youtube" ? <Loader2 className="spin" size={16} /> : <Youtube size={16} />} Escribir título y descripción</button>}
       </div>}
       <p className="settingsHint">Marca el video como hecho con IA al publicarlo.</p>

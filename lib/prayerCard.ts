@@ -18,7 +18,27 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, width: number) {
   return lines;
 }
 
-export const cardBackgroundPrompt = "Ornate vintage parchment prayer card background, aged cream paper texture, a glowing white dove with golden light rays at the top center, white lilies and soft gold ornaments framing the corners and sides, large empty plain parchment area in the center for text, soft warm light, highly detailed, vertical 9:16, absolutely no text, no letters, no words.";
+// Fondos de tarjeta: cada tema cambia los adornos (y cómo se mueven al animarlos); el centro siempre queda libre para el texto.
+export const CARD_THEMES: Record<string, { label: string; motif: string; motion: string }> = {
+  dove: { label: "Paloma y lirios", motif: "a glowing white dove with golden light rays at the top center, white lilies and soft gold ornaments framing the corners and sides", motion: "the white dove gently flaps its wings while hovering in place, light rays softly shimmer, lilies sway slightly" },
+  marian: { label: "Mariano (azul y flores)", motif: "a delicate golden crown with twelve small shining stars at the top center, soft blue and white flowers (hydrangeas, white roses, lilies) framing the sides, light blue silk ribbon details", motion: "the twelve stars twinkle softly, the flowers sway slightly, the silk ribbon moves gently" },
+  sacredHeart: { label: "Sagrado Corazón", motif: "a glowing Sacred Heart with a small cross and golden flames radiating soft light at the top center, deep red roses and gold filigree framing the corners", motion: "the Sacred Heart glows and pulses softly, the small flames flicker gently, rose petals sway slightly" },
+  roses: { label: "Rosas y cruz dorada", motif: "a radiant golden cross with soft light at the top center, blush pink and white roses with green leaves framing the edges, delicate gold filigree", motion: "the light of the golden cross shimmers softly, the roses sway slightly, a few petals drift down slowly" },
+  angels: { label: "Ángeles y nubes", motif: "two small praying angels with white wings on soft clouds in the upper corners, heavenly golden light rays from the top center, gold ornaments along the sides", motion: "the angels' wings move softly, the clouds drift slowly, the light rays shimmer" },
+  rosary: { label: "Rosario y velas", motif: "a wooden rosary with a small crucifix draped along the top, lit candles glowing in the lower corners, olive branches and gold ornaments along the sides", motion: "the candle flames flicker gently, warm light pulses softly, olive leaves move slightly" },
+  sunrise: { label: "Amanecer celestial", motif: "a soft sunrise sky with golden clouds and light rays at the top, wheat and olive branches framing the sides, a small shining cross in the sky", motion: "the clouds drift slowly, the sunrise light shimmers, wheat and olive branches sway gently" },
+  stainedGlass: { label: "Vitral", motif: "an arched stained glass window frame in soft jewel tones with a dove and a chalice in the glass at the top, ornate gold border", motion: "colored light from the stained glass shimmers and shifts softly, sparkles of light drift" },
+};
+const CARD_KEYWORDS: Array<[RegExp, string]> = [[/virgen|mar[ií]a|guadalupe|carmen|f[aá]tima|lourdes|inmaculada|rosa m[ií]stica/i, "marian"], [/sagrado coraz[oó]n|coraz[oó]n de jes[uú]s|divina misericordia/i, "sacredHeart"], [/esp[ií]ritu santo|pentecost/i, "dove"], [/[aá]ngel|arc[aá]ngel|miguel|rafael|gabriel/i, "angels"], [/rosario|difuntos|almas|duelo|luto/i, "rosary"], [/ma[nñ]ana|amanecer|d[ií]a|gratitud|gracias/i, "sunrise"]];
+
+// Tema automático: el que pide el tema de la oración; si no hay pista, uno al azar distinto del anterior.
+export function pickCardTheme(topic: string, previous = "") {
+  const hit = CARD_KEYWORDS.find(([re]) => re.test(topic))?.[1];
+  if (hit && hit !== previous) return hit;
+  const options = Object.keys(CARD_THEMES).filter(k => k !== previous);
+  return options[Math.floor(Math.random() * options.length)];
+}
+export const cardBackgroundPrompt = (theme: string) => `Ornate vintage parchment prayer card background, aged cream paper texture, ${(CARD_THEMES[theme] || CARD_THEMES.dove).motif}, large empty plain parchment area in the center for text, soft warm light, highly detailed, vertical 9:16, absolutely no text, no letters, no words.`;
 
 // Escribe el velo, el título y la oración. Se usa sobre el fondo (tarjeta fija) o sobre un lienzo vacío
 // (capa transparente que va encima del fondo animado, para que las letras no se deformen).
@@ -72,4 +92,4 @@ export async function renderPrayerCard(background: string, title: string, body: 
 }
 
 // Movimiento del fondo de la tarjeta: cámara fija para que la capa de texto siga alineada.
-export const cardMotionPrompt = "The white dove gently flaps its wings while hovering in place, golden light rays softly shimmer and pulse, white lilies sway slightly in a gentle breeze, a few soft sparkles drift. Static camera, no zoom, keep the parchment, ornaments and composition exactly the same, the center stays empty plain parchment, no text, no letters.";
+export const cardMotionPrompt = (theme: string) => `${(CARD_THEMES[theme] || CARD_THEMES.dove).motion}, a few soft sparkles drift. Static camera, no zoom, keep the parchment, ornaments and composition exactly the same, the center stays empty plain parchment, no text, no letters.`;

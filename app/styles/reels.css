@@ -98,3 +98,9 @@
 .devotionalImages figure.flagged img,.devotionalImages figure.flagged .storyThumb{outline:2px solid var(--ui-danger,#c0392b)}
 .devotionalImages figcaption{display:grid;gap:4px;font-size:12px;color:var(--ui-text-2)}
 .devotionalImages .uiIconBtn{position:absolute;top:4px;right:4px}
+.devotionalIdeas{display:grid;gap:8px;margin:10px 0}
+.devotionalIdeas>button{display:grid;gap:2px;text-align:left;padding:10px 12px;border:1px solid var(--ui-border);border-radius:10px;background:var(--ui-surface-2);color:var(--ui-text);cursor:pointer}
+.devotionalIdeas>button:hover,.devotionalIdeas>button.active{border-color:var(--ui-accent)}
+.devotionalIdeas>button span{font-size:12px;color:var(--ui-text-3)}
+.devotionalIdeas details{font-size:12px;color:var(--ui-text-2)}
+.devotionalIdeas ol{margin:6px 0 0;padding-left:18px;display:grid;gap:4px}

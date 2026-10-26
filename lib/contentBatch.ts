@@ -1,5 +1,6 @@
 // Lotes de contenido para el Estudio creativo: una fila = una imagen (titulo, texto, caption).
 // Cada preset reproduce el estilo de una página (Efímero: frases y mixto; Ecos de la Fe: oraciones largas).
+import { looksCorrupted } from "@/lib/textQuality";
 import { localComplianceReview } from "@/lib/metaCompliance";
 import { fingerprint } from "@/lib/creativeDuplicates";
 
@@ -72,6 +73,7 @@ export function screenRows(preset: BatchPreset, rows: BatchRow[], existing: stri
     let reason = "";
     if (key.length < 12) reason = "Muy corta";
     else if (seen.has(key)) reason = "Repetida";
+    else if ([row.titulo, row.texto, row.caption].some(t => t && looksCorrupted(t))) reason = "Texto dañado";
     else if ([row.texto, row.caption].some(t => t && localComplianceReview(t).status !== "pass")) reason = "No pasa Compliance";
     else if ([row.texto, row.caption].some(t => t && INTERACTION_BAIT.test(t))) reason = "Pide interacción";
     else if ([row.texto, row.caption].some(t => t && MONEY_PROMISE.test(t))) reason = "Promete dinero seguro";
