@@ -66,3 +66,4 @@
 .storyCaption p{margin:0;font-size:13px;line-height:1.5}
 .storyCaption .linkButton{align-self:flex-start}
 .reelStudio .reelActions{display:flex;align-items:center;gap:12px}
+.storyInfo{color:var(--ui-text-2)}

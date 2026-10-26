@@ -7,7 +7,8 @@ import { subtitleGroups, type TimedWord } from "@/lib/storyScript";
 // `video` es un clip de recorrido generado con IA (URL del mismo origen o blob:). Si existe, sustituye la imagen.
 export type ReelScene = { image: string; caption: string; duration: number; video?: string };
 // `subtitles`: palabras de la voz con su tiempo (desde que empieza la voz); se dibujan estilo karaoke abajo.
-export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; fade?: number; fps?: number };
+// `badge`: aviso pequeño fijo durante todo el video (por ejemplo, «Relato inspirador» en historias de ficción).
+export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; badge?: string; fade?: number; fps?: number };
 const VOICE_OFFSET = .4;
 
 const W = 1080, H = 1920;
@@ -160,6 +161,12 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
     drawCaption(ctx, options.title, H * .12, 78, titleAlpha);
     const captionFade = Math.min(1, frame.progress * durations[frame.index] / .4) * (1 - frame.mix);
     drawCaption(ctx, scenes[frame.index].caption, titleAlpha > 0 ? H * .12 + 230 : H * .12, 62, captionFade);
+    if (options.badge) {
+      ctx.save(); ctx.font = `600 34px ${FONT}`; ctx.textBaseline = "middle";
+      const label = options.badge; const w = ctx.measureText(label).width + 44; const x = (W - w) / 2, y = H * .045;
+      ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.beginPath(); ctx.roundRect(x, y, w, 56, 28); ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.textAlign = "center"; ctx.fillText(label, W / 2, y + 29); ctx.restore();
+    }
     if (groups.length) {
       const st = t - VOICE_OFFSET;
       const group = groups.find((g, i) => st >= g[0].start - .05 && st < (groups[i + 1]?.[0].start ?? g[g.length - 1].end + .6));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { narrationOf, parseScript, sceneDurationsFromWords, subtitleGroups, type TimedWord } from "@/lib/storyScript";
+import { FICTION_BADGE, FICTION_DISCLOSURE, ensureFictionDisclosure, healingClaims, narrationOf, parseScript, sceneDurationsFromWords, scriptPrompt, subtitleGroups, type TimedWord } from "@/lib/storyScript";
 
 const words = (texts: string[], step = .5): TimedWord[] => texts.map((text, i) => ({ text, start: i * step, end: i * step + step * .9 }));
 
@@ -38,5 +38,38 @@ describe("subtitleGroups", () => {
   it("splits into short phrases and breaks after sentence ends", () => {
     const groups = subtitleGroups(words(["A", "este", "hombre", "le", "cayeron", "siete", "rayos.", "Y", "sobrevivió."]));
     expect(groups.map(g => g.map(w => w.text).join(" "))).toEqual(["A este hombre le", "cayeron siete rayos.", "Y sobrevivió."]);
+  });
+});
+
+describe("relatos de ficción", () => {
+  const base = { title: "La fe de Marta", character: "", caption: "Una familia que no se rindió.", scenes: [{ text: "Marta ya no sabía qué hacer.", image: "", motion: "" }, { text: "Rezó a San Judas cada noche.", image: "", motion: "" }] };
+
+  it("adds the disclosure to the narration and the caption when missing", () => {
+    const script = ensureFictionDisclosure(base);
+    expect(script.scenes[0].text).toBe(`Marta ya no sabía qué hacer. ${FICTION_DISCLOSURE}`);
+    expect(script.caption).toBe(`${FICTION_BADGE}: Una familia que no se rindió.`);
+  });
+
+  it("keeps an existing disclosure as is", () => {
+    const script = ensureFictionDisclosure({ ...base, caption: "Relato inspirador: ya avisado.", scenes: [{ ...base.scenes[0], text: "Historia inspirada en la fe de muchas familias." }, base.scenes[1]] });
+    expect(script.scenes[0].text).toBe("Historia inspirada en la fe de muchas familias.");
+    expect(script.caption).toBe("Relato inspirador: ya avisado.");
+  });
+
+  it("moves a disclosure written at the end to the first scene", () => {
+    const script = ensureFictionDisclosure({ ...base, scenes: [base.scenes[0], { ...base.scenes[1], text: "Rezó a San Judas cada noche. Esta historia está inspirada en la fe de muchas familias." }] });
+    expect(script.scenes[0].text).toBe(`Marta ya no sabía qué hacer. ${FICTION_DISCLOSURE}`);
+    expect(script.scenes[1].text).toBe("Rezó a San Judas cada noche.");
+  });
+
+  it("flags scenes that sound like a promise of healing", () => {
+    const script = { ...base, scenes: [{ text: "Rezó y se curó de la noche a la mañana.", image: "", motion: "" }, { text: "Los médicos la atendieron y la fe le dio fuerza.", image: "", motion: "" }, { text: "Al final, el tumor desapareció.", image: "", motion: "" }, { text: "El cáncer desapareció por completo.", image: "", motion: "" }] };
+    expect(healingClaims(script)).toEqual([0, 2, 3]);
+  });
+
+  it("asks for invented characters and no healing promises in fiction mode", () => {
+    expect(scriptPrompt("tema", 8, "fiction")).toMatch(/NO un caso real/);
+    expect(scriptPrompt("tema", 8, "fiction")).toMatch(/Sin promesas de sanación/);
+    expect(scriptPrompt("tema", 8)).toMatch(/Solo hechos verdaderos/);
   });
 });

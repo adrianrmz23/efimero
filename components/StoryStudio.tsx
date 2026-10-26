@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, Clapperboard, Copy, Download, FileText, ImagePlus, Loader2, Mic, Sparkles, Trash2, UserRound, Video } from "lucide-react";
 import { renderReel } from "@/lib/reelRender";
-import { STORY_STYLES, narrationOf, sceneDurationsFromWords, styleSuffix, type StoryScript, type TimedWord } from "@/lib/storyScript";
+import { FICTION_BADGE, STORY_STYLES, healingClaims, narrationOf, sceneDurationsFromWords, styleSuffix, type StoryKind, type StoryScript, type TimedWord } from "@/lib/storyScript";
 import { useConfirm } from "@/components/ui/DialogProvider";
 
 type SceneMedia = { image?: string; video?: string; status?: "working" | "error"; note?: string };
@@ -22,6 +22,7 @@ const audioDuration = (blob: Blob) => new Promise<number>(resolve => { const a =
 export default function StoryStudio() {
   const confirm = useConfirm();
   const [topic, setTopic] = useState("");
+  const [kind, setKind] = useState<StoryKind>("real");
   const [sceneCount, setSceneCount] = useState(8);
   const [style, setStyle] = useState("cartoon");
   const [voiceName, setVoiceName] = useState("Charon");
@@ -48,7 +49,7 @@ export default function StoryStudio() {
     if (!topic.trim()) return;
     setBusy("script"); setError(""); setOutput(null);
     try {
-      const r = await fetch("/api/story/script", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, scenes: sceneCount }) });
+      const r = await fetch("/api/story/script", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, scenes: sceneCount, kind }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo escribir el guion.");
       setScript(d); setMedia(d.scenes.map(() => ({}))); setVoice(null); setCharacter("");
     } catch (e: any) { setError(e?.message || "No se pudo escribir el guion."); } finally { setBusy(""); }
@@ -126,11 +127,14 @@ export default function StoryStudio() {
       const durations = sceneDurationsFromWords(script.scenes.map(s => s.text), voice.words, voice.duration);
       const scenes = script.scenes.map((s, i) => ({ image: media[i]?.image || "", video: media[i]?.video, caption: "", duration: durations[i] }));
       if (scenes.some(s => !s.image)) throw new Error("Faltan ilustraciones. Créalas antes de generar el video.");
-      const { blob, type } = await renderReel(scenes, { title: script.title, voice: voice.blob, subtitles: voice.words }, setProgress);
+      const { blob, type } = await renderReel(scenes, { title: script.title, voice: voice.blob, subtitles: voice.words, badge: scriptKind === "fiction" ? FICTION_BADGE : undefined }, setProgress);
       setOutput({ url: URL.createObjectURL(blob), type });
     } catch (e: any) { setError(e?.message || "No se pudo generar el video."); } finally { setBusy(""); }
   }
 
+  // El tipo con el que se escribió el guion (no el seleccionado ahora) decide el aviso del video.
+  const scriptKind: StoryKind = (script as (StoryScript & { kind?: StoryKind }) | null)?.kind === "fiction" ? "fiction" : "real";
+  const flagged = script && scriptKind === "fiction" ? healingClaims(script) : [];
   const ready = Boolean(script && voice && media.length && media.every(m => m.image));
   const words = script ? narrationOf(script.scenes).split(/\s+/).filter(Boolean).length : 0;
   const extension = output?.type.includes("mp4") ? "mp4" : "webm";
@@ -141,7 +145,9 @@ export default function StoryStudio() {
       {error && <div className="quickNotice error"><AlertTriangle size={16} /><span>{error}</span></div>}
 
       <div className="storyStep"><span className="storyNum">1</span><div>
-        <label className="field"><span>Tema de la historia</span><textarea rows={2} value={topic} onChange={e => setTopic(e.target.value)} placeholder="Ej. Roy Sullivan, el guardabosques al que le cayeron siete rayos y sobrevivió" /></label>
+        <div className="field"><span>Tipo de historia</span><div className="segmented" role="group" aria-label="Tipo de historia"><button type="button" className={kind === "real" ? "active" : ""} onClick={() => setKind("real")}>Historia real</button><button type="button" className={kind === "fiction" ? "active" : ""} onClick={() => setKind("fiction")}>Relato inspirador (ficción)</button></div></div>
+        {kind === "fiction" && <p className="storyWarn storyInfo">Personajes inventados. El video muestra «{FICTION_BADGE}» todo el tiempo, la narración lo dice al inicio y el caption lo aclara. No promete curaciones.</p>}
+        <label className="field"><span>Tema de la historia</span><textarea rows={2} value={topic} onChange={e => setTopic(e.target.value)} placeholder={kind === "fiction" ? "Ej. Una mamá que le pide a San Judas Tadeo por el trabajo de su esposo y la familia sale adelante" : "Ej. Roy Sullivan, el guardabosques al que le cayeron siete rayos y sobrevivió"} /></label>
         <div className="fieldRow">
           <label className="field"><span>Estilo</span><select value={style} onChange={e => { setStyle(e.target.value); setOutput(null); }}>{Object.entries(STORY_STYLES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
           <label className="field"><span>Escenas</span><select value={sceneCount} onChange={e => setSceneCount(Number(e.target.value))}>{[6, 8, 10, 12].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
@@ -151,9 +157,10 @@ export default function StoryStudio() {
 
       {script && <>
         <div className="storyStep"><span className="storyNum">2</span><div>
-          <p className="storyWarn"><AlertTriangle size={14} /> Revisa los datos antes de publicar: la IA puede equivocarse en detalles.</p>
+          {scriptKind === "fiction" ? <p className="storyWarn storyInfo">{FICTION_BADGE}: personajes y hechos inventados con fines inspiradores.</p> : <p className="storyWarn"><AlertTriangle size={14} /> Revisa los datos antes de publicar: la IA puede equivocarse en detalles.</p>}
+          {flagged.length > 0 && <p className="storyWarn"><AlertTriangle size={14} /> Revisa {flagged.length === 1 ? "la escena" : "las escenas"} {flagged.map(i => i + 1).join(", ")}: suena a promesa de curación. Cámbiala por fuerza, paz o atención médica.</p>}
           <label className="field"><span>Título en pantalla</span><input value={script.title} maxLength={80} onChange={e => { setScript({ ...script, title: e.target.value }); setOutput(null); }} /></label>
-          <ol className="storyScenes">{script.scenes.map((s, i) => <li key={i} className={media[i]?.status === "error" ? "flagged" : ""}>
+          <ol className="storyScenes">{script.scenes.map((s, i) => <li key={i} className={media[i]?.status === "error" || flagged.includes(i) ? "flagged" : ""}>
             {media[i]?.image ? <img src={media[i].image} alt={`Escena ${i + 1}`} /> : <div className="storyThumb">{media[i]?.status === "working" ? <Loader2 className="spin" size={18} /> : i + 1}</div>}
             <div className="storySceneFields">
               <textarea rows={2} value={s.text} onChange={e => patchScene(i, { text: e.target.value })} aria-label={`Narración escena ${i + 1}`} />
