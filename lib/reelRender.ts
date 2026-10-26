@@ -2,10 +2,13 @@
 // con texto, voz en off y música opcionales.
 // Se graba en tiempo real con MediaRecorder: la pestaña debe quedarse visible mientras se genera.
 import { kenBurns, sceneAt, totalDuration } from "@/lib/reelTimeline";
+import { subtitleGroups, type TimedWord } from "@/lib/storyScript";
 
 // `video` es un clip de recorrido generado con IA (URL del mismo origen o blob:). Si existe, sustituye la imagen.
 export type ReelScene = { image: string; caption: string; duration: number; video?: string };
-export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; fade?: number; fps?: number };
+// `subtitles`: palabras de la voz con su tiempo (desde que empieza la voz); se dibujan estilo karaoke abajo.
+export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; fade?: number; fps?: number };
+const VOICE_OFFSET = .4;
 
 const W = 1080, H = 1920;
 const FONT = 'Inter, "Segoe UI", Arial, sans-serif';
@@ -62,6 +65,30 @@ function drawCaption(ctx: CanvasRenderingContext2D, text: string, y: number, siz
   ctx.restore();
 }
 
+// Subtítulo estilo karaoke: frase corta en blanco con la palabra que se está diciendo en amarillo.
+function drawSubtitle(ctx: CanvasRenderingContext2D, group: TimedWord[], t: number) {
+  const size = 70;
+  ctx.save();
+  ctx.font = `800 ${size}px ${FONT}`; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  const space = ctx.measureText(" ").width;
+  const widths = group.map(w => ctx.measureText(w.text).width);
+  // Si la frase no cabe en una línea, se parte en dos.
+  const lines: number[][] = [[]]; let lineWidth = 0;
+  group.forEach((_, i) => { const w = widths[i] + (lines[lines.length - 1].length ? space : 0); if (lineWidth + w > W * .86 && lines[lines.length - 1].length) { lines.push([]); lineWidth = 0; } lines[lines.length - 1].push(i); lineWidth += widths[i] + (lines[lines.length - 1].length > 1 ? space : 0); });
+  const baseY = H * .7 - (lines.length - 1) * size * .6;
+  lines.forEach((line, row) => {
+    const total = line.reduce((n, i, k) => n + widths[i] + (k ? space : 0), 0);
+    let x = (W - total) / 2; const y = baseY + row * size * 1.2;
+    line.forEach(i => {
+      const word = group[i]; const active = t >= word.start && t < word.end + .05;
+      ctx.lineWidth = size * .16; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.lineJoin = "round"; ctx.strokeText(word.text, x, y);
+      ctx.fillStyle = active ? "#ffd400" : "#ffffff"; ctx.fillText(word.text, x, y);
+      x += widths[i] + space;
+    });
+  });
+  ctx.restore();
+}
+
 export async function renderReel(scenes: ReelScene[], options: ReelOptions, onProgress?: (ratio: number) => void): Promise<{ blob: Blob; type: string }> {
   if (!scenes.length) throw new Error("Agrega al menos una escena.");
   if (typeof document !== "undefined" && document.fonts) { try { await document.fonts.load(`700 64px Inter`); } catch { /* Fuente de respaldo. */ } }
@@ -69,9 +96,12 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
     if (scene.video) { const el = await loadVideo(scene.video); return { kind: "video" as const, el, w: el.videoWidth, h: el.videoHeight }; }
     const el = await loadImage(scene.image); return { kind: "image" as const, el, w: el.width, h: el.height };
   }));
-  // Un clip no puede durar más que su video; si es más corto que la escena, se ajusta la escena.
-  const durations = scenes.map((scene, i) => { const s = sources[i]; const base = Math.max(1.5, scene.duration); return s.kind === "video" && Number.isFinite(s.el.duration) ? Math.min(base, s.el.duration) : base; });
+  // La duración de cada escena manda (la voz depende de ella). Si un clip es más corto, se reproduce más lento
+  // (hasta la mitad de velocidad) y, si aun así no alcanza, se queda en su último cuadro.
+  const durations = scenes.map(scene => Math.max(1.5, scene.duration));
+  sources.forEach((s, i) => { if (s.kind === "video" && Number.isFinite(s.el.duration) && s.el.duration > 0) s.el.playbackRate = Math.max(.5, Math.min(1, s.el.duration / durations[i])); });
   const fade = options.fade ?? .6, fps = options.fps ?? 30;
+  const groups = options.subtitles?.length ? subtitleGroups(options.subtitles) : [];
   const total = totalDuration(durations);
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("No se pudo iniciar el lienzo.");
@@ -98,7 +128,7 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
       const source = audio.createBufferSource(); source.buffer = buffer;
       // Un poco por debajo del máximo para que no sature al mezclarse con la música.
       const gain = audio.createGain(); gain.gain.value = .85;
-      source.connect(gain).connect(destination); source.start(now + .4);
+      source.connect(gain).connect(destination); source.start(now + VOICE_OFFSET);
     }
     destination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
   }
@@ -130,6 +160,11 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
     drawCaption(ctx, options.title, H * .12, 78, titleAlpha);
     const captionFade = Math.min(1, frame.progress * durations[frame.index] / .4) * (1 - frame.mix);
     drawCaption(ctx, scenes[frame.index].caption, titleAlpha > 0 ? H * .12 + 230 : H * .12, 62, captionFade);
+    if (groups.length) {
+      const st = t - VOICE_OFFSET;
+      const group = groups.find((g, i) => st >= g[0].start - .05 && st < (groups[i + 1]?.[0].start ?? g[g.length - 1].end + .6));
+      if (group) drawSubtitle(ctx, group, st);
+    }
   };
 
   sources.forEach(s => { if (s.kind === "video") s.el.currentTime = 0; });

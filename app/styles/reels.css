@@ -40,3 +40,29 @@
 .reelVoice select{width:auto}
 .reelVoice audio{height:36px;max-width:260px}
 .reelSceneFields .studioChip{align-self:flex-start}
+/* Modo Historia */
+.storyStep{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:start}
+.storyStep>div{display:flex;flex-direction:column;gap:12px;min-width:0}
+.storyStep>div>.uiBtn{align-self:flex-start}
+.storyNum{display:grid;place-items:center;width:26px;height:26px;border-radius:999px;background:var(--ui-surface-3);font-size:12px;font-weight:600;color:var(--ui-text-2)}
+.storyWarn{display:flex;align-items:center;gap:6px;margin:0;font-size:12px;color:var(--ui-warning)}
+.storyScenes{display:flex;flex-direction:column;gap:8px;max-height:560px;margin:0;padding:0;overflow:auto;list-style:none;scrollbar-width:thin}
+.storyScenes li{display:grid;grid-template-columns:60px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-bg)}
+.storyScenes li.flagged{border-color:var(--ui-danger-border)}
+.storyScenes img,.storyThumb{width:60px;height:106px;object-fit:cover;border-radius:6px}
+.storyThumb{display:grid;place-items:center;background:var(--ui-surface-2);font-size:13px;color:var(--ui-text-3)}
+.storySceneFields{display:flex;flex-direction:column;gap:6px;min-width:0}
+.storySceneFields textarea{font-size:13px;line-height:1.5}
+.storySceneFields details{font-size:12px;color:var(--ui-text-3)}
+.storySceneFields details[open]{display:flex;flex-direction:column;gap:6px}
+.storySceneFields summary{cursor:pointer}
+.storySceneFields .studioChip{align-self:flex-start}
+.storyCharacter{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:start}
+.storyCharacter img,.storyCharacter .storyThumb{width:72px;height:108px}
+.storyCharacter strong{font-size:13px}
+.storyCharacter p{margin:4px 0 6px;font-size:12px;line-height:1.5;color:var(--ui-text-2)}
+.storyCaption{display:flex;flex-direction:column;gap:4px;padding:12px;border:1px solid var(--ui-border);border-radius:var(--ui-r-md);background:var(--ui-bg)}
+.storyCaption span{font-size:12px;color:var(--ui-text-3)}
+.storyCaption p{margin:0;font-size:13px;line-height:1.5}
+.storyCaption .linkButton{align-self:flex-start}
+.reelStudio .reelActions{display:flex;align-items:center;gap:12px}

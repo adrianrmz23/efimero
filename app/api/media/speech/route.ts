@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const text = String(body.text || "").trim();
   const voice = VOICES.has(String(body.voice)) ? String(body.voice) : "Kore";
-  if (!text || text.length > 1500) return NextResponse.json({ error: "Escribe la narración (hasta 1500 caracteres)." }, { status: 400 });
+  if (!text || text.length > 4000) return NextResponse.json({ error: "Escribe la narración (hasta 4000 caracteres)." }, { status: 400 });
   try {
     const { bytes, type } = await ciSpeech(text, voice);
     return new NextResponse(new Uint8Array(bytes), { headers: { "Content-Type": type, "Cache-Control": "no-store" } });

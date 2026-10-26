@@ -51,6 +51,54 @@ export async function ciVideo(prompt: string, imageDataUrl: string, duration: nu
   throw new Error("Cheaper Inference no devolvió el video.");
 }
 
+export const ciTextModel = () => (process.env.CI_TEXT_MODEL || process.env.CHEAPERINFERENCE_MODEL || process.env.CHEAPESTINFERENCE_MODEL || process.env.CHEAPINFERENCE_MODEL || "gpt-5.6-terra").trim();
+export const ciImageRefModel = () => (process.env.CI_IMAGE_REF_MODEL || "nano-banana-2").trim();
+export const ciTranscribeModel = () => (process.env.CI_TRANSCRIBE_MODEL || "whisper-1").trim();
+
+export async function ciChat(system: string, user: string) {
+  const data = await (await call("/chat/completions", { model: ciTextModel(), messages: [{ role: "system", content: system }, { role: "user", content: user }], response_format: { type: "json_object" }, temperature: .7 }, 110_000)).json();
+  const text = String(data?.choices?.[0]?.message?.content || "");
+  if (!text) throw new Error("El modelo no devolvió texto.");
+  return text;
+}
+
+// Imagen manteniendo el personaje de una imagen de referencia. Si el modelo de edición no está disponible,
+// vuelve a generar solo con texto (la descripción del personaje en el prompt mantiene buena parte del parecido).
+export async function ciImageWithReference(prompt: string, reference: string) {
+  try {
+    const data = await (await call("/images/edits", { model: ciImageRefModel(), prompt, input_references: [reference], n: 1, size: "1024x1536" }, 180_000)).json();
+    const item = data?.data?.[0] || {};
+    if (item.b64_json) return { image: `data:image/jpeg;base64,${item.b64_json}`, usedReference: true };
+    if (item.url) { const file = await fetch(item.url, { cache: "no-store" }); return { image: `data:${(file.headers.get("content-type") || "image/jpeg").split(";")[0]};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`, usedReference: true }; }
+    throw new Error("Sin imagen");
+  } catch {
+    return { image: await ciImage(prompt), usedReference: false };
+  }
+}
+
+// Devuelve cada palabra con su tiempo. Whisper entrega segmentos de una palabra; si un segmento trae varias,
+// se reparte su tiempo entre ellas según su largo.
+export async function ciTranscribe(file: Blob) {
+  const { key, base } = config();
+  const form = new FormData();
+  form.set("model", ciTranscribeModel()); form.set("language", "es"); form.set("response_format", "verbose_json"); form.append("timestamp_granularities[]", "word");
+  form.set("file", file, "voz.wav");
+  const response = await fetch(`${base}/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form, cache: "no-store", signal: AbortSignal.timeout(110_000) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(String(data?.error?.message || `Cheaper Inference respondió ${response.status}.`)), { status: 502 });
+  type Piece = { text: string; start: number; end: number };
+  const words: Piece[] = [];
+  const source: any[] = Array.isArray(data.words) && data.words.length ? data.words.map((w: any) => ({ text: w.word ?? w.text, start: w.start, end: w.end })) : (Array.isArray(data.segments) ? data.segments : []);
+  for (const piece of source) {
+    const parts = String(piece.text || "").trim().split(/\s+/).filter(Boolean);
+    const start = Number(piece.start || 0), end = Math.max(start, Number(piece.end || start));
+    const total = parts.reduce((n, p) => n + p.length, 0) || 1;
+    let cursor = start;
+    for (const part of parts) { const span = (end - start) * part.length / total; words.push({ text: part, start: cursor, end: cursor + span }); cursor += span; }
+  }
+  return { words, duration: Number(data.duration || words[words.length - 1]?.end || 0), text: String(data.text || "") };
+}
+
 export async function ciSpeech(input: string, voice: string) {
   const response = await call("/audio/speech", { model: ciSpeechModel(), input, voice, response_format: "wav" }, 120_000);
   return { bytes: Buffer.from(await response.arrayBuffer()), type: (response.headers.get("content-type") || "audio/wav").split(";")[0] };
