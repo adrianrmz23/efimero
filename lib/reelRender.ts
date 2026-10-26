@@ -16,7 +16,8 @@ export type ReelTransition = "dissolve" | "black" | "cut";
 // `subtitleStyle`: "karaoke" (blanco con la palabra en amarillo), "highlight" (mayúsculas grandes con la palabra en un
 // recuadro de color), "box" (texto negro sobre recuadro blanco) o "none" (sin subtítulos, por ejemplo con la tarjeta de oración).
 export type SubtitleStyle = "karaoke" | "highlight" | "box" | "none";
-export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; subtitleStyle?: SubtitleStyle; badge?: string; transition?: ReelTransition; fade?: number; fps?: number; onPauseChange?: (paused: boolean) => void };
+// `musicVolume`: volumen de la música cuando hay voz (0 a 1; por defecto 0.22).
+export type ReelOptions = { title: string; music?: Blob | null; musicVolume?: number; voice?: Blob | null; subtitles?: TimedWord[]; subtitleStyle?: SubtitleStyle; badge?: string; transition?: ReelTransition; fade?: number; fps?: number; onPauseChange?: (paused: boolean) => void };
 const ease = (x: number) => x * x * (3 - 2 * x);
 const VOICE_OFFSET = .4;
 
@@ -142,7 +143,7 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
       const source = audio.createBufferSource(); source.buffer = buffer; source.loop = true;
       const gain = audio.createGain();
       // Con voz en off, la música baja para que la narración se entienda.
-      const level = options.voice ? .22 : .9;
+      const level = options.voice ? options.musicVolume ?? .22 : .9;
       gain.gain.setValueAtTime(level, now);
       gain.gain.setValueAtTime(level, now + Math.max(0, total - 1.5));
       gain.gain.linearRampToValueAtTime(0, now + total);

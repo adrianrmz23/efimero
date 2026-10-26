@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertTriangle, Check, Clapperboard, Copy, Download, FileText, ImagePlus, Loader2, Mic, ScrollText, Sparkles, Trash2, Video } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, Check, Clapperboard, Copy, Download, FileText, ImagePlus, Loader2, Mic, Music, ScrollText, Sparkles, Trash2, Video, Youtube } from "lucide-react";
 import { renderReel, type SubtitleStyle } from "@/lib/reelRender";
 import { sceneDurationsFromWords, type TimedWord } from "@/lib/storyScript";
-import { DEVOTIONAL_STYLES, devotionalSuffix, mergeVisuals, visualPlan, type DevotionalKind, type DevotionalScript } from "@/lib/devotional";
+import { DEVOTIONAL_STYLES, IMAGE_VARIETY, devotionalSuffix, mergeVisuals, visualPlan, type DevotionalKind, type DevotionalScript } from "@/lib/devotional";
 import { cardBackgroundPrompt, cardMotionPrompt, renderPrayerCardLayers } from "@/lib/prayerCard";
+import { renderAmbient, type AmbientMood } from "@/lib/ambientMusic";
+import type { YoutubeMeta } from "@/lib/youtubeMeta";
 import { useConfirm } from "@/components/ui/DialogProvider";
 import CoverMaker from "@/components/CoverMaker";
 
@@ -22,10 +24,14 @@ async function shrink(dataUrl: string, w: number, h: number, maxLength: number) 
   for (let q = .85; q >= .45; q -= .08) { const out = c.toDataURL("image/jpeg", q); if (out.length < maxLength) return out; }
   return c.toDataURL("image/jpeg", .4);
 }
+async function pool<T>(items: T[], limit: number, task: (item: T) => Promise<void>) { const queue = [...items]; await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => { while (queue.length) await task(queue.shift() as T); })); }
+type MusicChoice = "none" | AmbientMood | "file";
 const audioDuration = (blob: Blob) => new Promise<number>(resolve => { const a = new Audio(); a.onloadedmetadata = () => resolve(a.duration || 0); a.onerror = () => resolve(0); a.src = URL.createObjectURL(blob); });
-async function generateImage(prompt: string) {
+// Un reintento automático: a veces el proveedor responde «No compatible route» por saturación momentánea.
+async function generateImage(prompt: string, retry = true): Promise<string> {
   const r = await fetch("/api/media/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
-  const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo crear la imagen.");
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { if (retry && r.status !== 401) return generateImage(prompt, false); throw new Error(d.error || "No se pudo crear la imagen."); }
   return d.image as string;
 }
 // Texto de la tarjeta: la oración corrida sin la frase gancho (la primera parte) y el «Amén.» en su propio renglón.
@@ -49,6 +55,12 @@ export default function DevotionalStudio() {
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const [output, setOutput] = useState<{ url: string; type: string } | null>(null);
+  const [variety, setVariety] = useState<string>("some");
+  const [music, setMusic] = useState<MusicChoice>("celestial");
+  const [musicFile, setMusicFile] = useState<File | null>(null);
+  const [musicVolume, setMusicVolume] = useState(.18);
+  const musicRef = useRef<HTMLInputElement>(null);
+  const [youtube, setYoutube] = useState<(YoutubeMeta & { model?: string }) | null>(null);
 
   useEffect(() => () => { if (output) URL.revokeObjectURL(output.url); }, [output]);
   useEffect(() => () => { if (voice) URL.revokeObjectURL(voice.url); }, [voice]);
@@ -68,9 +80,9 @@ export default function DevotionalStudio() {
     if (!topic.trim()) return;
     setBusy("script"); setError(""); setOutput(null);
     try {
-      const r = await fetch("/api/story/devotional", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, kind }) });
+      const r = await fetch("/api/story/devotional", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, kind, supports: IMAGE_VARIETY.find(v => v.id === variety)?.supports }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo escribir la oración.");
-      setScript(d); setHero({}); setSupports(d.support.map(() => ({}))); setCard(c => ({ background: c.background })); setVoice(null);
+      setScript(d); setYoutube(null); setHero({}); setSupports(d.support.map(() => ({}))); setCard(c => ({ background: c.background })); setVoice(null);
     } catch (e: any) { setError(e?.message || "No se pudo escribir la oración."); } finally { setBusy(""); }
   }
 
@@ -85,17 +97,18 @@ export default function DevotionalStudio() {
       try { setCard({ background: await generateImage(cardBackgroundPrompt) }); } catch (e: any) { setCard({ status: "error", note: e?.message || "Error" }); }
       return;
     }
-    const jobs: Array<Promise<void>> = [];
-    if (!hero.image) jobs.push((async () => {
+    // Se crean 3 a la vez para no saturar la API.
+    const jobs: Array<() => Promise<void>> = [];
+    if (!hero.image) jobs.push(async () => {
       setHero({ status: "working" });
       try { setHero({ image: await generateImage(`${script.hero}. ${devotionalSuffix(style)}`) }); } catch (e: any) { setHero({ status: "error", note: e?.message || "Error" }); }
-    })());
-    script.support.forEach((prompt, i) => { if (supports[i]?.image) return; jobs.push((async () => {
+    });
+    script.support.forEach((prompt, i) => { if (supports[i]?.image) return; jobs.push(async () => {
       setSupports(cur => cur.map((s, k) => k === i ? { status: "working" } : s));
       try { const image = await generateImage(`${prompt}. Same sacred mood and color palette as a devotional image of: ${script.hero}. ${devotionalSuffix(style)}`); setSupports(cur => cur.map((s, k) => k === i ? { image } : s)); }
       catch (e: any) { setSupports(cur => cur.map((s, k) => k === i ? { status: "error", note: e?.message || "Error" } : s)); }
-    })()); });
-    await Promise.all(jobs);
+    }); });
+    await pool(jobs, 3, job => job());
   }
 
   // Movimiento suave de la imagen protagonista: un clip de 10 s que se repite en cada aparición.
@@ -128,6 +141,16 @@ export default function DevotionalStudio() {
     } catch (e: any) { setCard(c => ({ ...c, status: "error", note: e?.message || "Error" })); }
   }
 
+  async function writeYoutube() {
+    if (!script) return;
+    setBusy("youtube"); setError("");
+    try {
+      const r = await fetch("/api/youtube/metadata", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: script.kind === "psalm" ? "salmo" : "oración", topic, title: script.title, text: script.lines.join(" ") }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo escribir la publicación.");
+      setYoutube(d);
+    } catch (e: any) { setError(e?.message || "No se pudo escribir la publicación."); } finally { setBusy(""); }
+  }
+
   async function makeVoice() {
     if (!script) return;
     setBusy("voice"); setError("");
@@ -147,14 +170,18 @@ export default function DevotionalStudio() {
     setBusy("render"); setError(""); setOutput(null); setProgress(0);
     try {
       const durations = sceneDurationsFromWords(script.lines, voice.words, voice.duration);
-      const ready = supports.filter(s => s.image);
-      const plan = mergeVisuals(visualPlan(script.lines.length, ready.length, look === "card"), durations);
+      // Solo las imágenes de apoyo ya creadas; cada una conserva la parte de la narración que ilustra.
+      const readyIndex = supports.map((s, i) => s.image ? i : -1).filter(i => i >= 0);
+      const ready = readyIndex.map(i => supports[i]);
+      const plan = mergeVisuals(visualPlan(script.lines.length, ready.length, look === "card", readyIndex.map(i => script.supportLines?.[i] ?? -1)), durations);
       const heroImage = look === "card" ? card.image : hero.image;
       if (!heroImage) throw new Error(look === "card" ? "Falta la tarjeta. Créala antes de generar el video." : "Falta la imagen protagonista.");
       const scenes = plan.map(p => p.visual === "hero"
         ? look === "card" ? { image: heroImage, video: card.video, overlay: card.video ? card.overlay : undefined, loop: true, caption: "", duration: p.duration } : { image: heroImage, video: hero.video, caption: "", duration: p.duration }
         : { image: ready[p.visual].image as string, caption: "", duration: p.duration });
-      const { blob, type } = await renderReel(scenes, { title: look === "card" ? "" : script.title, voice: voice.blob, subtitles: voice.words, subtitleStyle, transition: "dissolve", fade: 1.4, onPauseChange: setPaused }, setProgress);
+      const total = scenes.reduce((n, s) => n + s.duration, 0);
+      const track = music === "file" ? musicFile : music === "none" ? null : await renderAmbient(total, music);
+      const { blob, type } = await renderReel(scenes, { title: look === "card" ? "" : script.title, music: track, musicVolume, voice: voice.blob, subtitles: voice.words, subtitleStyle, transition: "dissolve", fade: 1.4, onPauseChange: setPaused }, setProgress);
       setOutput({ url: URL.createObjectURL(blob), type });
     } catch (e: any) { setError(e?.message || "No se pudo generar el video."); } finally { setBusy(""); }
   }
@@ -173,6 +200,7 @@ export default function DevotionalStudio() {
 
       <div className="storyStep"><span className="storyNum">1</span><div>
         <div className="field"><span>Tipo</span><div className="adsCountries" role="group" aria-label="Tipo"><button type="button" className={kind === "prayer" ? "active" : ""} aria-pressed={kind === "prayer"} onClick={() => setKind("prayer")}>Oración</button><button type="button" className={kind === "psalm" ? "active" : ""} aria-pressed={kind === "psalm"} onClick={() => setKind("psalm")}>Salmo</button></div></div>
+        <label className="field"><span>Imágenes distintas</span><select value={variety} onChange={e => setVariety(e.target.value)}>{IMAGE_VARIETY.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</select></label>
         <label className="field"><span>Tema</span><textarea rows={2} value={topic} onChange={e => setTopic(e.target.value)} placeholder={kind === "psalm" ? "Ej.: Salmo 91 para la protección de la familia" : "Ej.: Oración a la Virgen del Carmen por los hijos"} /></label>
         <button type="button" className={script ? "uiBtn uiBtnSecondary" : "uiBtn uiBtnPrimary"} onClick={() => void writeScript()} disabled={!topic.trim() || !!busy}>{busy === "script" ? <Loader2 className="spin" size={16} /> : <FileText size={16} />} {script ? "Reescribir" : kind === "psalm" ? "Escribir salmo" : "Escribir oración"}</button>
       </div></div>
@@ -191,7 +219,7 @@ export default function DevotionalStudio() {
             <label className="field"><span>Estilo</span><select value={style} onChange={e => { setStyle(e.target.value); setOutput(null); }}>{Object.entries(DEVOTIONAL_STYLES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
             <details><summary>Descripciones de las imágenes</summary>
               <label className="field"><span>Protagonista</span><textarea rows={3} value={script.hero} onChange={e => setScript({ ...script, hero: e.target.value })} /></label>
-              {script.support.map((s, i) => <label className="field" key={i}><span>Apoyo {i + 1}</span><textarea rows={2} value={s} onChange={e => setScript({ ...script, support: script.support.map((x, k) => k === i ? e.target.value : x) })} /></label>)}
+              {script.support.map((s, i) => <label className="field" key={i}><span>Apoyo {i + 1}{(script.supportLines?.[i] ?? -1) >= 0 ? ` · parte ${(script.supportLines?.[i] ?? 0) + 1}` : ""}</span><textarea rows={2} value={s} onChange={e => setScript({ ...script, support: script.support.map((x, k) => k === i ? e.target.value : x) })} /></label>)}
             </details>
             <div className="devotionalImages">
               {[{ m: hero, label: "Protagonista", i: -1 }, ...supports.map((m, i) => ({ m, label: `Apoyo ${i + 1}`, i }))].map(({ m, label, i }) => <figure key={label} className={m.status === "error" ? "flagged" : ""}>
@@ -223,6 +251,12 @@ export default function DevotionalStudio() {
             {voice && <audio src={voice.url} controls />}</div>
           {voice && <span className="studioHint"><Check size={13} /> {voice.words.length} palabras sincronizadas · {voice.duration.toFixed(1)} s</span>}
           <label className="field"><span>Subtítulos</span><select value={subtitleStyle} onChange={e => { setSubtitleStyle(e.target.value as SubtitleStyle); setOutput(null); }}>{SUBTITLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+          <div className="fieldRow">
+            <label className="field"><span><Music size={13} /> Música de fondo</span><select value={music} onChange={e => { const v = e.target.value as MusicChoice; setMusic(v); setOutput(null); if (v === "file" && !musicFile) musicRef.current?.click(); }}><option value="celestial">Ambiente celestial (original, sin derechos)</option><option value="calm">Ambiente sereno (original, sin derechos)</option><option value="file">{musicFile ? `Mi pista: ${musicFile.name}` : "Subir mi pista…"}</option><option value="none">Sin música</option></select></label>
+            {music !== "none" && <label className="field"><span>Volumen {Math.round(musicVolume * 100)}%</span><input type="range" min={.05} max={.4} step={.01} value={musicVolume} onChange={e => { setMusicVolume(Number(e.target.value)); setOutput(null); }} /></label>}
+          </div>
+          <input ref={musicRef} type="file" accept="audio/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) { setMusicFile(f); setMusic("file"); setOutput(null); } e.target.value = ""; }} />
+          {music === "file" && <span className="studioHint">Usa música libre de derechos (por ejemplo, de la Biblioteca de audio de YouTube) para evitar reclamos.</span>}
         </div></div>
 
         <div className="actionBar reelActions"><button type="button" className="uiBtn uiBtnPrimary" onClick={() => void render()} disabled={!ready || !!busy || working}>{busy === "render" ? <Loader2 className="spin" size={16} /> : <Clapperboard size={16} />} {busy === "render" ? paused ? "En pausa: regresa a esta pestaña" : `Generando… ${Math.round(progress * 100)}%` : "Generar video"}</button>{!ready && <span className="studioHint">Necesitas {look === "card" ? "la tarjeta" : "la imagen protagonista"} y la voz.</span>}</div>
@@ -236,6 +270,20 @@ export default function DevotionalStudio() {
         <CoverMaker images={coverImages} text={script.cover || script.title} highlight={script.coverWord} badge={script.kind === "psalm" ? "Salmo" : "Oración"} aiPrompt={`${script.hero}. ${devotionalSuffix(style)}`} />
       </details>}
       {script?.caption && <div className="storyCaption"><span>Texto para la publicación</span><p>{script.caption}</p><button type="button" className="linkButton" onClick={() => void navigator.clipboard?.writeText(script.caption)}><Copy size={13} /> Copiar</button></div>}
+      {script && <div className="storyCaption"><span><Youtube size={14} /> Publicación para YouTube</span>
+        {youtube ? <>
+          <p><strong>{youtube.title}</strong></p>
+          <p style={{ whiteSpace: "pre-wrap" }}>{youtube.description}</p>
+          {youtube.tags.length > 0 && <p className="studioHint">Etiquetas: {youtube.tags.join(", ")}</p>}
+          <div className="reelToolbar">
+            <button type="button" className="linkButton" onClick={() => void navigator.clipboard?.writeText(youtube.title)}><Copy size={13} /> Copiar título</button>
+            <button type="button" className="linkButton" onClick={() => void navigator.clipboard?.writeText(youtube.description)}><Copy size={13} /> Copiar descripción</button>
+            <button type="button" className="linkButton" onClick={() => void navigator.clipboard?.writeText(youtube.tags.join(", "))}><Copy size={13} /> Copiar etiquetas</button>
+            <button type="button" className="linkButton" onClick={() => void writeYoutube()} disabled={!!busy}>Reescribir</button>
+          </div>
+          {youtube.model && <span className="studioHint">Escrito con {youtube.model}</span>}
+        </> : <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void writeYoutube()} disabled={!!busy}>{busy === "youtube" ? <Loader2 className="spin" size={16} /> : <Youtube size={16} />} Escribir título y descripción</button>}
+      </div>}
       <p className="settingsHint">Marca el video como hecho con IA al publicarlo.</p>
     </section>
   </div>;
