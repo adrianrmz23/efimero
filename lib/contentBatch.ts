@@ -11,6 +11,9 @@ const NO_BAIT = "Prohibido pedir que comenten, compartan, den like, etiqueten, e
 export const BATCH_PRESETS: BatchPreset[] = [
   { id: "efimero-frases", label: "Efímero · frases", page: "Efímero", template: "minimal", perCall: 25, max: 100,
     rules: `Frases ORIGINALES estilo tuit en español de México, con las que la gente se identifique y quiera mandarle a alguien. Mezcla temas: motivación y esfuerzo, desamor, fe y Dios, familia, humor de la vida diaria, reflexión. Cada frase de 6 a 35 palabras, una o dos oraciones, lenguaje cotidiano y directo. "titulo" vacío. "caption" vacío en la mayoría; en 1 de cada 4, un caption de 1 a 5 palabras o un emoji. No copies frases famosas ni de otras páginas.` },
+  { id: "efimero-deseos", label: "Efímero · deseos y decretos", page: "Efímero", template: "minimal", perCall: 25, max: 100,
+    rules: `Deseos y decretos positivos estilo tuit, en español de México, con gancho de noticia o aviso ("🚨 ÚLTIMA HORA:", "Aviso:", "Atención:", "Antes de que termine el año…", "Este diciembre…", "Este mes…") y deseos de prosperidad, trabajo, deudas pagadas, salud, paz, familia y que lleguen cosas buenas. Tono esperanzador, con un toque de fe en algunas. De 8 a 30 palabras. "titulo" vacío; "caption" vacío o de 1 a 4 palabras o un emoji.
+Prohibido: pedir cualquier acción sobre la publicación o pantalla ("toca", "toque", "dale like", "reacciona", "escribe", "comenta", "comparte", "guarda", "si lees esto…haz"), condicionar el deseo a interactuar ("quien toque/lea/comparta esto recibirá…") y prometer resultados seguros ("serás rico", "ganarás dinero seguro", "te llegará dinero garantizado"). Se vale desear y decretar en tono de deseo ("que te llegue…", "viene lo bueno…", "lo que pides ya va en camino").` },
   { id: "efimero-mixto", label: "Efímero · mixto", page: "Efímero", template: "minimal", perCall: 20, max: 100,
     rules: `Mezcla intercalada: 45% frases estilo tuit (titulo vacío), 25% oraciones cortas (titulo "Oración por/para …", 40 a 70 palabras en versos cortos separados por saltos de línea, termina con una línea en blanco y "Amén."), 20% salmos y 10% proverbios u otros versículos (titulo con la cita, ej. "Salmo 46:1"; texto fiel a la Reina-Valera antigua escribiendo "Señor" en lugar de "Jehová", en versos cortos; usa solo versículos muy conocidos que recuerdes con exactitud). Captions cortos o vacíos.` },
   { id: "ecos-oraciones", label: "Ecos de la Fe · oraciones largas", page: "Ecos de la Fe", template: "photo", perCall: 5, max: 60,
@@ -52,6 +55,10 @@ export function parseBatch(raw: string): BatchRow[] {
   } catch { return []; }
 }
 
+// Interacción con la publicación o promesas seguras de dinero: Meta lo trata como engagement bait o engaño.
+const INTERACTION_BAIT = /((?<!\p{L})(toca|toque|toquen|toques|comparte|comparta|guarda|reacciona a|dale like a|dale me gusta a) (esta|este|esto)(?!\p{L})|(?<!\p{L})(quien|cualquiera que|el que|la que) (toque|lea|vea|comparta|reaccione)|dale like|dale me gusta|escribe am[eé]n|escribe s[ií]|comenta (am[eé]n|tu|s[ií])|etiqueta a)/iu;
+const MONEY_PROMISE = /(ser[aá]s? ric[oa]|ser[aá]n ric[oa]s|millonari[oa]|ganar[aá]s? (mucho )?dinero|dinero (seguro|garantizad[oa])|te llegar[aá] dinero seguro)/iu;
+
 const WEEKDAYS = /(?<!\p{L})(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)(?!\p{L})/iu;
 const wordCount = (text: string) => text.split(/\s+/).filter(Boolean).length;
 
@@ -66,6 +73,8 @@ export function screenRows(preset: BatchPreset, rows: BatchRow[], existing: stri
     if (key.length < 12) reason = "Muy corta";
     else if (seen.has(key)) reason = "Repetida";
     else if ([row.texto, row.caption].some(t => t && localComplianceReview(t).status !== "pass")) reason = "No pasa Compliance";
+    else if ([row.texto, row.caption].some(t => t && INTERACTION_BAIT.test(t))) reason = "Pide interacción";
+    else if ([row.texto, row.caption].some(t => t && MONEY_PROMISE.test(t))) reason = "Promete dinero seguro";
     else if (preset.id === "ecos-oraciones" && !WEEKDAYS.test(themes) && WEEKDAYS.test(`${row.titulo} ${row.texto}`)) reason = "Menciona un día de la semana";
     else if (preset.id === "ecos-oraciones" && (wordCount(row.texto) < 70 || !/Am[eé]n\.?\s*$/i.test(row.texto))) reason = "Oración incompleta";
     if (reason) { rejected.push({ ...row, reason }); continue; }

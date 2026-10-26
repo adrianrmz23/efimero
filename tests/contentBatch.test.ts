@@ -46,3 +46,25 @@ it("builds a CSV with BOM, header and line breaks kept inside the cell", () => {
   expect(csv).toContain('"Señor,\r\nAmén."');
   expect(csv).toContain('"Dijo ""paz"""');
 });
+
+describe("deseos y decretos", () => {
+  const deseos = BATCH_PRESETS.find(p => p.id === "efimero-deseos")!;
+  it("rejects asking to touch the post and promises of guaranteed money", () => {
+    const { accepted, rejected } = screenRows(deseos, [
+      { titulo: "", texto: "🚨 ÚLTIMA HORA: Cualquiera que toque esta publicación será rico antes de diciembre.", caption: "" },
+      { titulo: "", texto: "Atención: este diciembre serás rico, es seguro.", caption: "" },
+      { titulo: "", texto: "🚨 ÚLTIMA HORA: diciembre viene con buenas noticias para los que no se rindieron este año.", caption: "" },
+    ], []);
+    expect(rejected.map(r => r.reason)).toEqual(["Pide interacción", "Promete dinero seguro"]);
+    expect(accepted).toHaveLength(1);
+  });
+});
+
+it("does not flag everyday uses of the same verbs", () => {
+  const frases = BATCH_PRESETS.find(p => p.id === "efimero-frases")!;
+  const { accepted } = screenRows(frases, [
+    { titulo: "", texto: "Hoy me toca trabajar doble, pero lo hago por los míos.", caption: "" },
+    { titulo: "", texto: "Lo bueno de tocar fondo es que ya solo queda subir.", caption: "" },
+  ], []);
+  expect(accepted).toHaveLength(2);
+});
