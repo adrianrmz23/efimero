@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerUser } from "@/lib/serverAuth";
 import { ciChat } from "@/lib/cheaperInference";
 import { ensureFictionDisclosure, parseScript, scriptPrompt } from "@/lib/storyScript";
+import { findSaint } from "@/lib/saints";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -19,7 +20,16 @@ export async function POST(request: NextRequest) {
     const system = kind === "fiction"
       ? "Eres guionista de relatos cortos de fe en español latino. Escribes ficción inspiradora claramente identificada como relato, sin presentarla como caso real. Respondes solo JSON válido."
       : "Eres guionista de shorts virales de historias reales en español latino. Respondes solo JSON válido.";
-    const script = parseScript(await ciChat(system, scriptPrompt(topic, scenes, kind)));
+    // Si el tema menciona un santo conocido, se fija su iconografía para que salga reconocible.
+    const known = findSaint(topic);
+    const isSaintStory = Boolean(known) || /\b(san|santa|santo|virgen|beato|beata)\s/i.test(topic);
+    const parsed = parseScript(await ciChat(system, scriptPrompt(topic, scenes, kind, known?.look || "", isSaintStory)));
+    const script = known ? { ...parsed, saint: known.look } : parsed;
+    // Si el modelo no marcó ninguna escena con el santo, se marcan la del medio y la última.
+    if (isSaintStory && script.saint && !script.scenes.some(s => s.showsSaint)) {
+      const mid = Math.floor(script.scenes.length / 2);
+      script.scenes = script.scenes.map((s, i) => i === mid || i === script.scenes.length - 1 ? { ...s, showsSaint: true } : s);
+    }
     return NextResponse.json({ ...(kind === "fiction" ? ensureFictionDisclosure(script) : script), kind });
   } catch (error: any) {
     return NextResponse.json({ error: String(error?.message || "No se pudo escribir el guion.") }, { status: Number(error?.status || 502) });

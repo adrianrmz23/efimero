@@ -67,3 +67,5 @@
 .storyCaption .linkButton{align-self:flex-start}
 .reelStudio .reelActions{display:flex;align-items:center;gap:12px}
 .storyInfo{color:var(--ui-text-2)}
+.storySaintToggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ui-text-2);cursor:pointer}
+.storySaintToggle input{margin:0;accent-color:var(--ui-text)}

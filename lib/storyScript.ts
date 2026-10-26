@@ -1,6 +1,7 @@
 // Historias narradas: guion por escenas, estilos de ilustración y sincronía entre voz, escenas y subtítulos.
-export type StoryScene = { text: string; image: string; motion: string };
-export type StoryScript = { title: string; character: string; caption: string; scenes: StoryScene[] };
+// `showsSaint`: la escena debe dibujar al santo (con su iconografía de `saint`).
+export type StoryScene = { text: string; image: string; motion: string; showsSaint?: boolean };
+export type StoryScript = { title: string; character: string; saint?: string; caption: string; scenes: StoryScene[] };
 export type TimedWord = { text: string; start: number; end: number };
 
 export const STORY_STYLES: Record<string, { label: string; prompt: string }> = {
@@ -16,26 +17,37 @@ export type StoryKind = "real" | "fiction";
 export const FICTION_BADGE = "Relato inspirador";
 export const FICTION_DISCLOSURE = "Esta historia está inspirada en la fe de muchas familias.";
 
+// Ganchos: la primera frase decide si la gente se queda; se piden con técnicas concretas y se prohíben aperturas planas.
+const HOOK_RULES = `- La PRIMERA FRASE es el gancho y decide si la gente sigue viendo: de 6 a 14 palabras, concreta y visual, que abra una pregunta urgente en la mente. Usa una de estas técnicas: un riesgo inmediato con cuenta regresiva ("Le quedaban tres días para perder su casa."), una imagen impactante ("Cerró la puerta para que sus hijos no la vieran llorar."), una contradicción ("Los médicos ya se habían despedido de él… pero su madre no."), o una frase que nadie esperaría.
+- PROHIBIDO empezar con "Esta es la historia de", "Había una vez", "¿Sabías que", "En un pequeño pueblo" o con fechas.
+- A la mitad, una frase de giro que mantenga la tensión ("Pero esa noche, todo empeoró.").
+- El título en pantalla es corto e intrigante, no un resumen.`;
+
 const REAL_RULES = `- Solo hechos verdaderos y verificables; no inventes datos, fechas, cifras ni frases textuales. Si no estás seguro de un dato, no lo incluyas.
-- La primera frase es un gancho fuerte que despierte curiosidad.
 - Narración total de 110 a 140 palabras, frases cortas, tono de documental intrigante, español latino.`;
 
 // Relato de ficción: personajes comunes inventados, sin hacerlos pasar por un caso real y sin prometer curaciones.
 const FICTION_RULES = `- Es un relato de ficción inspirador, NO un caso real: personajes comunes inventados (solo nombre de pila), sin apellidos, ciudades exactas, fechas ni detalles que lo hagan parecer un caso documentado.
-- La primera escena empieza con un gancho emotivo y termina con esta frase exacta: "${FICTION_DISCLOSURE}"
+- La primera escena empieza con el gancho y termina con esta frase exacta: "${FICTION_DISCLOSURE}"
 - Estructura: gancho, situación difícil con drama y tensión, momento de fe y oración, final feliz y esperanzador, y una invocación corta al santo o a Dios.
 - Sin promesas de sanación: no digas que la oración curó una enfermedad ni que algo desapareció milagrosamente. En temas de salud, los médicos atienden y la fe da fuerza, paz y esperanza; el final feliz puede ser recuperación con atención médica, reconciliación, trabajo, regreso a casa o paz.
 - Tono cálido y devocional, español latino, narración total de 110 a 140 palabras, frases cortas.`;
 
-export function scriptPrompt(topic: string, scenes: number, kind: StoryKind = "real") {
+// Si la historia es de un santo, debe VERSE: aparece con su iconografía en las escenas clave.
+const saintRules = (saintLook: string) => `- La historia es de un santo: el santo debe APARECER en la imagen al menos en 3 escenas (marca esas escenas con "showsSaint": true): cuando lo invocan (su imagen, estampa o figura cobra vida con luz suave o se aparece en sueños), en el momento decisivo (presencia luminosa que acompaña, consuela o guía, sin hacer magia) y en el final feliz (bendiciendo a la familia desde una luz cálida).
+- En esas escenas la descripción en inglés de la ilustración incluye al santo junto a los personajes.
+- Campo "saint": descripción en inglés del santo con su iconografía tradicional${saintLook ? `; usa exactamente esta: ${saintLook}` : ""}.`;
+
+export function scriptPrompt(topic: string, scenes: number, kind: StoryKind = "real", saintLook = "", isSaintStory = Boolean(saintLook)) {
   return `Escribe el guion de un short vertical de 40 a 60 segundos sobre: ${topic}.
 Reglas:
-${kind === "fiction" ? FICTION_RULES : REAL_RULES}
+${HOOK_RULES}
+${kind === "fiction" ? FICTION_RULES : REAL_RULES}${isSaintStory ? `\n${saintRules(saintLook)}` : ""}
 - Divide la narración en ${scenes} escenas en orden; cada escena tiene 1 o 2 frases.
 - Para cada escena describe en inglés la ilustración (sin texto en la imagen) y el movimiento de cámara.
 - No pidas que comenten, compartan, den like ni sigan la cuenta.${kind === "fiction" ? `
 - El caption empieza con "${FICTION_BADGE}:".` : ""}
-Devuelve exactamente este JSON: {"title":"título corto para mostrar arriba (máx. 60 caracteres)","character":"descripción en inglés del personaje principal (rasgos, peinado y ropa) para dibujarlo igual en todas las escenas; vacío si no hay personaje","caption":"texto corto para la publicación, sin pedir interacción","scenes":[{"text":"narración en español","image":"descripción en inglés","motion":"camera motion in English"}]}`;
+Devuelve exactamente este JSON: {"title":"título corto e intrigante para mostrar arriba (máx. 60 caracteres)","character":"descripción en inglés del personaje principal (rasgos, peinado y ropa) para dibujarlo igual en todas las escenas; vacío si no hay personaje","saint":"descripción en inglés del santo con su iconografía; vacío si no hay santo","caption":"texto corto para la publicación, sin pedir interacción","scenes":[{"text":"narración en español","image":"descripción en inglés","motion":"camera motion in English","showsSaint":false}]}`;
 }
 
 // Garantiza el aviso en los relatos de ficción aunque el modelo lo olvide (narración y caption).
@@ -58,9 +70,9 @@ export function parseScript(raw: string): StoryScript {
   const start = raw.indexOf("{"), end = raw.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("El modelo no devolvió el guion en el formato esperado.");
   const data = JSON.parse(raw.slice(start, end + 1));
-  const scenes = (Array.isArray(data.scenes) ? data.scenes : []).map((s: any) => ({ text: String(s?.text || "").trim(), image: String(s?.image || "").trim(), motion: String(s?.motion || "").trim() })).filter((s: StoryScene) => s.text);
+  const scenes = (Array.isArray(data.scenes) ? data.scenes : []).map((s: any) => ({ text: String(s?.text || "").trim(), image: String(s?.image || "").trim(), motion: String(s?.motion || "").trim(), showsSaint: s?.showsSaint === true })).filter((s: StoryScene) => s.text);
   if (scenes.length < 2) throw new Error("El guion llegó sin escenas suficientes. Intenta de nuevo.");
-  return { title: String(data.title || "").trim().slice(0, 80), character: String(data.character || "").trim(), caption: String(data.caption || "").trim(), scenes: scenes.slice(0, 14) };
+  return { title: String(data.title || "").trim().slice(0, 80), character: String(data.character || "").trim(), saint: String(data.saint || "").trim(), caption: String(data.caption || "").trim(), scenes: scenes.slice(0, 14) };
 }
 
 export const narrationOf = (scenes: StoryScene[]) => scenes.map(s => s.text.trim()).filter(Boolean).join(" ");

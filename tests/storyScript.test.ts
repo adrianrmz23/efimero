@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FICTION_BADGE, FICTION_DISCLOSURE, ensureFictionDisclosure, healingClaims, narrationOf, parseScript, sceneDurationsFromWords, scriptPrompt, subtitleGroups, type TimedWord } from "@/lib/storyScript";
+import { findSaint } from "@/lib/saints";
 
 const words = (texts: string[], step = .5): TimedWord[] => texts.map((text, i) => ({ text, start: i * step, end: i * step + step * .9 }));
 
@@ -71,5 +72,27 @@ describe("relatos de ficción", () => {
     expect(scriptPrompt("tema", 8, "fiction")).toMatch(/NO un caso real/);
     expect(scriptPrompt("tema", 8, "fiction")).toMatch(/Sin promesas de sanación/);
     expect(scriptPrompt("tema", 8)).toMatch(/Solo hechos verdaderos/);
+  });
+});
+
+describe("santos y ganchos", () => {
+  it("finds a saint mentioned in the topic, with or without accents", () => {
+    expect(findSaint("Una mamá le pide a San Judas Tadeo por su esposo")?.label).toBe("San Judas Tadeo");
+    expect(findSaint("milagro de la virgen de GUADALUPE")?.label).toBe("Virgen de Guadalupe");
+    expect(findSaint("Roy Sullivan y los rayos")).toBeNull();
+  });
+
+  it("asks for strong hooks and for the saint to appear when there is one", () => {
+    const prompt = scriptPrompt("tema", 8, "fiction", "Saint Jude look");
+    expect(prompt).toMatch(/PRIMERA FRASE es el gancho/);
+    expect(prompt).toMatch(/PROHIBIDO empezar con "Esta es la historia de"/);
+    expect(prompt).toMatch(/usa exactamente esta: Saint Jude look/);
+    expect(scriptPrompt("tema", 8)).not.toMatch(/showsSaint": true/);
+  });
+
+  it("keeps the saint fields from the model output", () => {
+    const script = parseScript('{"saint":"Saint Jude","scenes":[{"text":"Uno.","showsSaint":true},{"text":"Dos."}]}');
+    expect(script.saint).toBe("Saint Jude");
+    expect(script.scenes.map(s => s.showsSaint)).toEqual([true, false]);
   });
 });

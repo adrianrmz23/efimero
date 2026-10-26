@@ -10,7 +10,8 @@ async function ensureBucket() {
   const db = getSupabaseAdmin();
   const { data } = await db.storage.getBucket(BUCKET);
   if (!data) {
-    const { error } = await db.storage.createBucket(BUCKET, { public: false, fileSizeLimit: "100MB" });
+    // Sin límite propio: usa el máximo del plan de Supabase (pedir más del permitido hace que la creación falle).
+    const { error } = await db.storage.createBucket(BUCKET, { public: false });
     if (error && !/already exists/i.test(error.message)) throw error;
   }
   bucketReady = true;

@@ -72,7 +72,9 @@ export default function StoryStudio() {
     setMedia(cur => cur.map((m, k) => k === i ? { ...m, status: "working", note: "" } : m));
     try {
       const who = script.character ? ` The main character always looks the same: ${script.character}.` : "";
-      const prompt = `${reference ? "Use the character from the reference image exactly (same face, hair and clothes). " : ""}${scene.image}${who} ${styleSuffix(style)}`;
+      // En las escenas marcadas, el santo se dibuja con su iconografía tradicional.
+      const saint = scene.showsSaint && script.saint ? ` The saint appears in this scene, recognizable by the traditional iconography: ${script.saint}. Respectful, luminous, devotional depiction.` : "";
+      const prompt = `${reference ? "Use the character from the reference image exactly (same face, hair and clothes). " : ""}${scene.image}${who}${saint} ${styleSuffix(style)}`;
       const r = await fetch("/api/media/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, reference: reference || undefined }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "No se pudo crear la ilustración.");
       setMedia(cur => cur.map((m, k) => k === i ? { image: d.image } : m));
@@ -165,6 +167,7 @@ export default function StoryStudio() {
             {media[i]?.image ? <img src={media[i].image} alt={`Escena ${i + 1}`} /> : <div className="storyThumb">{media[i]?.status === "working" ? <Loader2 className="spin" size={18} /> : i + 1}</div>}
             <div className="storySceneFields">
               <textarea rows={2} value={s.text} onChange={e => patchScene(i, { text: e.target.value })} aria-label={`Narración escena ${i + 1}`} />
+              {script.saint && <label className="storySaintToggle"><input type="checkbox" checked={Boolean(s.showsSaint)} onChange={e => patchScene(i, { showsSaint: e.target.checked })} /> Aparece el santo</label>}
               <details><summary>Ilustración y movimiento</summary><textarea rows={3} value={s.image} onChange={e => patchScene(i, { image: e.target.value })} aria-label="Descripción de la ilustración" /><input value={s.motion} onChange={e => patchScene(i, { motion: e.target.value })} aria-label="Movimiento de cámara" /></details>
               {media[i]?.video ? <span className="studioChip ok"><Check size={12} /> Animada</span> : media[i]?.status === "working" ? <span className="studioChip"><Loader2 className="spin" size={12} /> Trabajando…</span> : media[i]?.status === "error" ? <span className="studioChip error" title={media[i].note}><AlertTriangle size={12} /> {media[i].note}</span> : null}
             </div>
@@ -178,6 +181,7 @@ export default function StoryStudio() {
         </div></div>
 
         <div className="storyStep"><span className="storyNum">3</span><div>
+          {script.saint !== undefined && script.saint !== "" && <label className="field"><span>Santo <small>iconografía en inglés; aparece en las escenas marcadas</small></span><textarea rows={2} value={script.saint} onChange={e => { setScript({ ...script, saint: e.target.value }); setOutput(null); }} /></label>}
           {script.character && <div className="storyCharacter">{character ? <img src={character} alt="Personaje" /> : <div className="storyThumb"><UserRound size={20} /></div>}<div><strong>Personaje</strong><p>{script.character}</p><button type="button" className="linkButton" onClick={() => void makeCharacter()} disabled={!!busy}>{busy === "character" ? "Creando…" : character ? "Rehacer personaje" : "Crear personaje de referencia"}</button></div></div>}
           <div className="reelToolbar">
             <button type="button" className="uiBtn uiBtnSecondary" onClick={() => void makeScenes()} disabled={!!busy || media.some(m => m.status === "working") || media.every(m => m.image)}><Sparkles size={16} /> Crear ilustraciones</button>
