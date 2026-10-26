@@ -9,8 +9,9 @@ import { TRANSFORM_PRESETS, beforePrompt, transformPrompt } from "@/lib/transfor
 import { DEFAULT_HOUSE_STYLE, ROOM_PRESETS, roomImagePrompt, roomMotionPrompt } from "@/lib/walkthroughPresets";
 import { useConfirm } from "@/components/ui/DialogProvider";
 import StoryStudio from "@/components/StoryStudio";
+import DevotionalStudio from "@/components/DevotionalStudio";
 
-type Mode = "walkthrough" | "transform" | "story";
+type Mode = "walkthrough" | "transform" | "story" | "devotional";
 type Job = { statusUrl: string; responseUrl: string; estimatedCost: number };
 // Escena del recorrido: puede tener un clip animado con IA; `status` muestra si se está animando.
 type Scene = ReelScene & { motion?: string; status?: "animating" | "error"; note?: string };
@@ -141,10 +142,10 @@ export default function ReelStudio(){
 
   return <div className="reelStudio">
     <div className="pageIntro"><div><span className="overline">REELS</span><h1>Estudio de reels</h1><p>Recorridos de casas con movimiento suave a partir de tus imágenes, y transformaciones de antes y después con video generado por IA.</p></div></div>
-    <div className="segmented reelModes" role="tablist" aria-label="Tipo de reel"><button type="button" role="tab" aria-selected={mode==="walkthrough"} className={mode==="walkthrough"?"active":""} onClick={()=>setMode("walkthrough")}><Film size={15}/> Recorrido</button><button type="button" role="tab" aria-selected={mode==="transform"} className={mode==="transform"?"active":""} onClick={()=>setMode("transform")}><Wand2 size={15}/> Transformación</button><button type="button" role="tab" aria-selected={mode==="story"} className={mode==="story"?"active":""} onClick={()=>setMode("story")}><Clapperboard size={15}/> Historia</button></div>
+    <div className="segmented reelModes" role="tablist" aria-label="Tipo de reel"><button type="button" role="tab" aria-selected={mode==="walkthrough"} className={mode==="walkthrough"?"active":""} onClick={()=>setMode("walkthrough")}><Film size={15}/> Recorrido</button><button type="button" role="tab" aria-selected={mode==="transform"} className={mode==="transform"?"active":""} onClick={()=>setMode("transform")}><Wand2 size={15}/> Transformación</button><button type="button" role="tab" aria-selected={mode==="story"} className={mode==="story"?"active":""} onClick={()=>setMode("story")}><Clapperboard size={15}/> Historia</button><button type="button" role="tab" aria-selected={mode==="devotional"} className={mode==="devotional"?"active":""} onClick={()=>setMode("devotional")}><Sparkles size={15}/> Oración devocional</button></div>
     {error&&<div className="quickNotice error"><AlertTriangle size={16}/><span>{error}</span></div>}
 
-    {mode==="story"?<StoryStudio/>:mode==="walkthrough"?<div className="reelGrid">
+    {mode==="story"?<StoryStudio/>:mode==="devotional"?<DevotionalStudio/>:mode==="walkthrough"?<div className="reelGrid">
       <section className="calPanel">
         <div className="adsHead"><div><h2>Escenas</h2><p>Sube las imágenes del recorrido en orden: fachada, entrada, sala, cocina… Cada una se anima con un acercamiento suave.</p></div><span className="statusPill tone-neutral">{scenes.length} · {seconds.toFixed(1)} s</span></div>
         <input ref={imagesRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e=>void addImages(e)}/>

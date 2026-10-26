@@ -11,7 +11,10 @@ export type ReelScene = { image: string; caption: string; duration: number; vide
 // `transition`: cómo pasa una escena a la siguiente. "dissolve" mezcla suave con un ligero acercamiento,
 // "black" funde a negro (para momentos dramáticos) y "cut" es corte directo.
 export type ReelTransition = "dissolve" | "black" | "cut";
-export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; badge?: string; transition?: ReelTransition; fade?: number; fps?: number; onPauseChange?: (paused: boolean) => void };
+// `subtitleStyle`: "karaoke" (blanco con la palabra en amarillo), "highlight" (mayúsculas grandes con la palabra en un
+// recuadro de color), "box" (texto negro sobre recuadro blanco) o "none" (sin subtítulos, por ejemplo con la tarjeta de oración).
+export type SubtitleStyle = "karaoke" | "highlight" | "box" | "none";
+export type ReelOptions = { title: string; music?: File | null; voice?: Blob | null; subtitles?: TimedWord[]; subtitleStyle?: SubtitleStyle; badge?: string; transition?: ReelTransition; fade?: number; fps?: number; onPauseChange?: (paused: boolean) => void };
 const ease = (x: number) => x * x * (3 - 2 * x);
 const VOICE_OFFSET = .4;
 
@@ -71,23 +74,34 @@ function drawCaption(ctx: CanvasRenderingContext2D, text: string, y: number, siz
 }
 
 // Subtítulo estilo karaoke: frase corta en blanco con la palabra que se está diciendo en amarillo.
-function drawSubtitle(ctx: CanvasRenderingContext2D, group: TimedWord[], t: number) {
-  const size = 70;
+function drawSubtitle(ctx: CanvasRenderingContext2D, group: TimedWord[], t: number, style: SubtitleStyle = "karaoke") {
+  if (style === "none") return;
+  const size = style === "highlight" ? 84 : style === "box" ? 62 : 70;
+  const label = (w: TimedWord) => style === "highlight" ? w.text.toLocaleUpperCase("es") : w.text;
   ctx.save();
-  ctx.font = `800 ${size}px ${FONT}`; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  ctx.font = `${style === "box" ? 700 : 800} ${size}px ${FONT}`; ctx.textBaseline = "middle"; ctx.textAlign = "left";
   const space = ctx.measureText(" ").width;
-  const widths = group.map(w => ctx.measureText(w.text).width);
+  const widths = group.map(w => ctx.measureText(label(w)).width);
   // Si la frase no cabe en una línea, se parte en dos.
   const lines: number[][] = [[]]; let lineWidth = 0;
   group.forEach((_, i) => { const w = widths[i] + (lines[lines.length - 1].length ? space : 0); if (lineWidth + w > W * .86 && lines[lines.length - 1].length) { lines.push([]); lineWidth = 0; } lines[lines.length - 1].push(i); lineWidth += widths[i] + (lines[lines.length - 1].length > 1 ? space : 0); });
-  const baseY = H * .7 - (lines.length - 1) * size * .6;
+  const lineH = size * (style === "box" ? 1.45 : 1.2);
+  const baseY = (style === "highlight" ? H * .62 : H * .7) - (lines.length - 1) * lineH / 2;
   lines.forEach((line, row) => {
     const total = line.reduce((n, i, k) => n + widths[i] + (k ? space : 0), 0);
-    let x = (W - total) / 2; const y = baseY + row * size * 1.2;
+    let x = (W - total) / 2; const y = baseY + row * lineH;
+    // Recuadro blanco detrás de cada renglón, como en los videos de frailes y predicadores.
+    if (style === "box") { ctx.fillStyle = "rgba(255,255,255,.94)"; ctx.beginPath(); ctx.roundRect(x - 26, y - size * .68, total + 52, size * 1.36, 18); ctx.fill(); }
     line.forEach(i => {
-      const word = group[i]; const active = t >= word.start && t < word.end + .05;
-      ctx.lineWidth = size * .16; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.lineJoin = "round"; ctx.strokeText(word.text, x, y);
-      ctx.fillStyle = active ? "#ffd400" : "#ffffff"; ctx.fillText(word.text, x, y);
+      const word = group[i]; const text = label(word); const active = t >= word.start && t < word.end + .05;
+      if (style === "box") { ctx.fillStyle = active ? "#8b1a1a" : "#111111"; ctx.fillText(text, x, y); }
+      else if (style === "highlight") {
+        if (active) { ctx.fillStyle = "#f2b705"; ctx.beginPath(); ctx.roundRect(x - 14, y - size * .62, widths[i] + 28, size * 1.24, 16); ctx.fill(); ctx.fillStyle = "#111111"; ctx.fillText(text, x, y); }
+        else { ctx.lineWidth = size * .18; ctx.strokeStyle = "rgba(0,0,0,.9)"; ctx.lineJoin = "round"; ctx.strokeText(text, x, y); ctx.fillStyle = "#ffffff"; ctx.fillText(text, x, y); }
+      } else {
+        ctx.lineWidth = size * .16; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.lineJoin = "round"; ctx.strokeText(text, x, y);
+        ctx.fillStyle = active ? "#ffd400" : "#ffffff"; ctx.fillText(text, x, y);
+      }
       x += widths[i] + space;
     });
   });
@@ -185,7 +199,7 @@ export async function renderReel(scenes: ReelScene[], options: ReelOptions, onPr
     if (groups.length) {
       const st = t - VOICE_OFFSET;
       const group = groups.find((g, i) => st >= g[0].start - .05 && st < (groups[i + 1]?.[0].start ?? g[g.length - 1].end + .6));
-      if (group) drawSubtitle(ctx, group, st);
+      if (group) drawSubtitle(ctx, group, st, options.subtitleStyle);
     }
   };
 
