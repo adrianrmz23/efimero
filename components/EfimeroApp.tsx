@@ -4,7 +4,7 @@ import { formatPageLabel } from "@/lib/pageLabels";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive, Activity, BarChart3, Bookmark, BrainCircuit, CalendarDays, Check, ChevronLeft, ChevronRight, ChevronsUpDown, ClipboardCheck, Clock3, Copy, Database, Film,
+  Archive, Activity, BarChart3, Bookmark, BrainCircuit, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Copy, Database, Film,
   ExternalLink, FileText, Filter, Fingerprint, Flame, FlaskConical, Gauge, Image as ImageIcon, Layers3, LayoutDashboard, Library, Link2, Menu, MessageCircle, MessagesSquare, Plus, RefreshCw, RadioTower, ShieldCheck,
   Palette, Search, Settings2, Smile, Sparkles, Star, Trash2, TrendingUp, Type as TypeIcon, Upload, WandSparkles, X, Zap,
 } from "lucide-react";
@@ -306,12 +306,9 @@ function EfimeroShell(){
         <button className="sidebarCollapseButton mobileSidebarClose" onClick={()=>setMobileNav(false)} aria-label="Cerrar menú"><X size={18}/></button>
       </div>
 
-      <label className="pageSwitcher" title="Cambiar página activa">
-        <span className="pageAvatar">{(workspacePage?.name||"?").trim().charAt(0).toUpperCase()}</span>
-        <span className="pageSwitcherText"><strong>{workspacePage?.name||(workspacePages.length?"Elige una página":"Sin páginas")}</strong><small>{workspacePages.length?"Página activa":"Conecta Facebook en Ajustes"}</small></span>
-        <ChevronsUpDown size={15} className="pageSwitcherIcon"/>
-        <select aria-label="Página activa" value={workspacePageId} onChange={e=>void changeWorkspacePage(e.target.value)} disabled={!workspacePages.length}><option value="">{workspacePages.length?"Selecciona una página":"Conecta Facebook primero"}</option>{workspacePages.map(page=><option value={page.id} key={page.id}>{formatPageLabel(page)}</option>)}</select>
-      </label>
+      <button className="sidebarNewBtn" onClick={()=>{setTab("creator");setMobileNav(false)}} title="Nuevo post">
+        <Plus size={17}/><span>Nuevo</span>
+      </button>
 
       <button className="sidebarSearch" onClick={()=>{setPaletteOpen(true);setMobileNav(false)}} title="Buscar (Ctrl K)"><Search size={16}/><span>Buscar</span><kbd>Ctrl K</kbd></button>
 
@@ -319,6 +316,20 @@ function EfimeroShell(){
         {navGroups.map((group,index)=><SidebarGroup key={group.label||index} label={group.label} collapsed={sidebarCollapsed}>
           {group.sections.map(section=><Nav key={section.id} active={activeSection.id===section.id} onClick={()=>goToSection(section)} icon={section.icon} label={section.label}/>)}
         </SidebarGroup>)}
+
+        <div className="channelList">
+          <div className="channelListLabel">Canales</div>
+          {workspacePages.length?workspacePages.map(page=>{
+            const active=page.id===workspacePageId;
+            const initial=(page.name||"?").trim().charAt(0).toUpperCase();
+            const metric=typeof page.followers_count==="number"?`${new Intl.NumberFormat("es-MX").format(page.followers_count)} seguidores`
+              :typeof page.fan_count==="number"?`${new Intl.NumberFormat("es-MX").format(page.fan_count)} Me gusta`:"Página de Facebook";
+            return <button key={page.id} type="button" className={active?"channelItem active":"channelItem"} onClick={()=>void changeWorkspacePage(page.id)} title={formatPageLabel(page)}>
+              {page.picture?<img src={page.picture} alt=""/>:<span className="channelAvatar">{initial}</span>}
+              <span className="channelMeta"><strong>{page.name}</strong><small>{metric}</small></span>
+            </button>;
+          }):<div className="channelEmpty">Conecta Facebook para ver tus páginas.<button type="button" onClick={()=>{goToSection(settingsSection);setTab("meta")}}>Ir a Meta</button></div>}
+        </div>
       </nav>
 
       <div className="sidebarFooter">
